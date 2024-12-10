@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools", "wheel"]  # Build dependencies
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project_x"
+version = "0.1.0"
+description = "A Python package example"
+authors = [
+    { name = "eric", email = "eric.email@example.com" }
+]
+
+dependencies = [
+  # intentionally loose. perhaps these should be vendored to not collide with user code?
+  "attrs>=20.1,<24",
+  "fastapi>=0.75.2,<0.111.0",
+  "pydantic>=1.9,<3",
+  "PyYAML",
+  "requests>=2,<3",
+  "structlog>=20,<25",
+  "typing_extensions>=4.4.0",
+  "uvicorn[standard]>=0.12,<1",
+  "pillow",
+  "fire"
+]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cog*"]
+exclude = ["tests*"]
+
+[project.scripts]
+project-x = "cli:main"  # CLI tool entry point
