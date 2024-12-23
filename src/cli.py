@@ -38,10 +38,12 @@ class Cli:
 
     def start(self, server: str, **kwargs):
         if server == "model":
-            args_list = [
-                f"--{key}" if isinstance(value, bool) and value else f"--{key} {value}"
-                for key, value in kwargs.items()
-            ]
+            args_list = []
+            for key, value in kwargs.items():
+                if isinstance(value, bool) and value:
+                    args_list.append(f"--{key}")
+                else:
+                    args_list.extend([f"--{key}", str(value)])  # Separate key and value
             start_model_server(parse_args(args_list))
             # start_model_server_()
         if server == "business":

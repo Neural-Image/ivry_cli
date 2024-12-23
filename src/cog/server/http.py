@@ -595,7 +595,7 @@ def parse_args(args_list=None):
         help="Number of worker processes. Defaults to number of CPUs, or 1 if using a GPU.",
     )
     parser.add_argument(
-        "--upload-url",
+        "--upload_url",
         dest="upload_url",
         type=str,
         default=None,

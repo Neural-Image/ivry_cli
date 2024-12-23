@@ -1,8 +1,12 @@
-from fastapi import FastAPI, File, UploadFile, Request
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 import json
+
+from typing import Annotated
+
+
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -21,15 +25,40 @@ def main():
 
 
     # Add an API endpoint for file upload
-    @server.put("/upload")
-    async def upload_file(file: UploadFile = File(...)):
+    # @server.put("/upload/{file_path}")
+    # async def upload_file(file: UploadFile = File(...)):
+    #     """
+    #     Upload a file and save it to the static directory.
+    #     """
+    #     file_location = f"upload/{file.filename}"
+    #     with open(file_location, "wb") as f:
+    #         f.write(await file.read())
+    #     return {"message": "File uploaded successfully", "file_path": f"/static/{file.filename}"}
+    
+    @server.put("/upload_file/{file_path}")
+    async def upload_file(file_path: str, request: Request):
         """
-        Upload a file and save it to the static directory.
+        Handle file upload via PUT request and save to the static directory.
         """
-        file_location = f"upload/{file.filename}"
-        with open(file_location, "wb") as f:
-            f.write(await file.read())
-        return {"message": "File uploaded successfully", "file_path": f"/static/{file.filename}"}
+        file_location = os.path.join("upload", file_path)
+        try:
+            # Read the entire body content
+            file_content = await request.body()
+
+            # Write the content to the specified file location
+            with open(file_location, "wb") as file:
+                file.write(file_content)
+
+        except Exception as e:
+            logger.error(f"Failed to save file: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+        logger.info(f"File saved successfully: {file_location}")
+        return {"message": "File uploaded successfully", "file_path": f"/static/{file_path}"}
+    
+    @server.post("/post_exp")
+    async def upload_file(request: Request):
+        return await request.json()
 
     @server.post("/webhook/prediction")
     async def prediction_webhook(request: Request):

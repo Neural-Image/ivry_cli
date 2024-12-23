@@ -15,7 +15,6 @@ class Predictor(BasePredictor):
                 guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     ) -> Path:
         print(image)
-        self.comfyui_instance()
         img = Image.open(image)
         original_width, original_height = img.size
         sleep(2)

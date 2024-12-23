@@ -1,3 +1,8 @@
+### start server
+`project-x start model --upload-url=http://localhost:3010/upload_file`
+
+### prediction call
+```
 {
   "input": {
     "image": "http://localhost:3010/upload/upTAgMAHQe2SJTPy0UKUhA.jpeg",
@@ -7,7 +12,6 @@
   },
   "id": "string",
   "created_at": "2024-12-06T00:20:04.185Z",
-  "output_file_prefix": "http://localhost:3010/upload",
   "webhook": "http://localhost:3010/webhook/prediction",
   "webhook_events_filter": [
     "start",
@@ -16,3 +20,4 @@
     "completed"
   ]
 }
+```
