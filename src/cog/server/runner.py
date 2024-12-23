@@ -66,7 +66,7 @@ class PredictionRunner:
 
         self._setup_task: Optional[SetupTask] = None
         self._predict_task: Optional[PredictTask] = None
-        self._prediction_id = None
+        self._prediction_id: Optional[str] = None
 
     def setup(self) -> "SetupTask":
         assert self._setup_task is None, "do not call setup twice"
@@ -270,7 +270,7 @@ class PredictTask(Task[schema.PredictionResponse]):
 
         self._p = schema.PredictionResponse(**request_dict)
         self._p.status = schema.Status.PROCESSING
-        self._output_type_multi = None
+        self._output_type_multi : bool | None = None
         self._p.output = None
         self._p.logs = ""
         self._p.started_at = datetime.now(tz=timezone.utc)

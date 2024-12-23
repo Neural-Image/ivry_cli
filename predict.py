@@ -14,7 +14,7 @@ class Predictor(BasePredictor):
                 steps: int = Input(default=50, ge=0, le=1000, description="steps"),
                 guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     ) -> Path:
-        print(image)
+        print("input image:", image)
         img = Image.open(image)
         original_width, original_height = img.size
         sleep(2)

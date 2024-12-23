@@ -439,6 +439,9 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
         if hasattr(request.input, "cleanup"):
             predict_task.add_done_callback(lambda _: request.input.cleanup())
 
+        #NOTE this can be used to handle file removal
+        # predict_task.add_done_callback(lambda rez: print("done callback", rez))
+
         predict_task.add_done_callback(_handle_predict_done)
 
         if respond_async:
