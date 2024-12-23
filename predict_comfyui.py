@@ -24,7 +24,7 @@ class Predictor(BasePredictor):
                 seed: int = Input(description="seed"),
                 steps: int = Input(default=50, ge=0, le=1000, description="steps"),
                 guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
-    ) -> Path:
+    ) -> list[Path]:
         client_id = str(uuid.uuid4())
         prompt_text = """
         {
@@ -130,5 +130,5 @@ class Predictor(BasePredictor):
         for node_id in images:
             for image_path in images[node_id]:
                 img_path_list.append(image_path)
-        output_path_list = [Path(os.path.join(COMFYUI_PATH, "output", p)) for p in img_path_list] 
-        return output_path_list[0]
+        output_path_list = [Path(os.path.join(COMFYUI_PATH, "output", p)) for p in img_path_list] * 2
+        return output_path_list

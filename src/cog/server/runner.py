@@ -239,9 +239,9 @@ def generate_file_uploader(
     client = _make_file_upload_http_client()
 
     def file_uploader(output: Any) -> Any:
-        def upload_file(fh: io.IOBase) -> str:
+        def upload_file(fh: io.IOBase, id: str = "0") -> str:
             return put_file_to_signed_endpoint(
-                fh, endpoint=upload_url, prediction_id=prediction_id, client=client
+                fh, endpoint=upload_url, prediction_id=prediction_id, client=client, id=id
             )
 
         return upload_files(output, upload_file=upload_file)

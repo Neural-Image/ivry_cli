@@ -5,6 +5,7 @@ from types import GeneratorType
 from typing import Any, Callable
 
 from pydantic import BaseModel
+from functools import partial
 
 # numpy is an optional dependency, but the process of importing it is not
 # thread-safe, so we attempt the import once here.
@@ -58,9 +59,9 @@ def upload_files(obj: Any, upload_file: Callable[[io.IOBase], str]) -> Any:
     if type(obj) == str:  # noqa: E721 # pylint: disable=unidiomatic-typecheck
         return obj
     if isinstance(obj, dict):
-        return {key: upload_files(value, upload_file) for key, value in obj.items()}
+        return {key: upload_files(value, partial(upload_file, id=key)) for key, value in obj.items()}
     if isinstance(obj, list):
-        return [upload_files(value, upload_file) for value in obj]
+        return [upload_files(value, partial(upload_file, id=idx)) for idx, value in enumerate(obj)]
     if isinstance(obj, Path):
         with obj.open("rb") as f:
             return upload_file(f)

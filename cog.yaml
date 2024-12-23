@@ -1,12 +1,12 @@
-# Mode dependencies
-build:
-  python_version: "3.12"
-  python_packages:
-    - "fastapi==0.68.0"
-    - "uvicorn==0.15.0"
-# ComfyUI entrypoint
-# predict: "path/to/main.py:ComfyUI"
-# Custom model entrypoint
-# predict: "predict.py:Predictor"
+# # Mode dependencies
+# build:
+#   python_version: "3.12"
+#   python_packages:
+#     - "fastapi==0.68.0"
+#     - "uvicorn==0.15.0"
+# # ComfyUI entrypoint
+# # predict: "path/to/main.py:ComfyUI"
+# # Custom model entrypoint
+# # predict: "predict.py:Predictor"
 predict: "predict_comfyui.py:Predictor"
 

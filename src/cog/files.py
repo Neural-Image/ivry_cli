@@ -41,7 +41,7 @@ def guess_filename(obj: io.IOBase) -> str:
 
 
 def put_file_to_signed_endpoint(
-    fh: io.IOBase, endpoint: str, client: requests.Session, prediction_id: Optional[str]
+    fh: io.IOBase, endpoint: str, client: requests.Session, prediction_id: Optional[str], id: str
 ) -> str:
     if fh.seekable():
         fh.seek(0)
@@ -61,7 +61,7 @@ def put_file_to_signed_endpoint(
         headers["X-Prediction-ID"] = prediction_id
 
     resp = client.put(
-        ensure_trailing_slash(endpoint) + filename,
+        ensure_trailing_slash(endpoint) + f"{prediction_id}_{id}_{filename}",
         fh,  # type: ignore
         headers=headers,
         timeout=(connect_timeout, read_timeout),
