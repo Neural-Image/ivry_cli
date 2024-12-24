@@ -8,9 +8,8 @@ def clean_quotes(value):
     return value
 
 
-def parse_predict():
-    module_path = 'predict.py'
-    with open(module_path, encoding="utf-8") as file:
+def parse_predict(predict_filename):
+    with open(predict_filename, encoding="utf-8") as file:
         source_code = file.read()
 
     # Parse the source code into an AST
@@ -61,5 +60,5 @@ def parse_predict():
     }
 
     # Optional: Save YAML to a file
-    with open('InTypeOutType.yaml', 'w') as file:
+    with open('predict_signature.yaml', 'w') as file:
         yaml.dump(data, file, default_flow_style=False)

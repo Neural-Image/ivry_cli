@@ -1,5 +1,12 @@
+### installation
+1. clone the repo
+2. `pip install -e .`
+
 ### start server
 `project-x start model --upload-url=http://localhost:3010/upload_file`
+
+### start mockup business server
+`project-x start business`
 
 ### prediction call
 #### header

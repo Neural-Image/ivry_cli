@@ -9,10 +9,21 @@ from cog.server.http import parse_args, main as start_model_server
 from communicate import upload_config
 import requests
 import json
+import shutil
 
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
 
 class Cli:
+    def init(self, mode: str = "comfyui"):
+        src_path = Path(__file__).parent / "templates"
+        dest_path = Path.cwd()
+        if mode == "comfyui":
+            shutil.copy(src_path / "predict_comfyui.py", dest_path / "predict.py")
+            shutil.copy(src_path / "cog.yaml", dest_path / "cog.yaml")
+        else:
+            raise ValueError(f"mode {mode} is unknown.")
+        return "Initialized."
+    
     def login(self, auth_token: str):
         # TODO verify the auth_token is valid...
         os.makedirs(IVRY_CREDENTIAL_DIR, exist_ok=True)
@@ -51,9 +62,9 @@ class Cli:
         else:
             raise ValueError(f"server {server} is unknown.")
 
-    def parse_predict(self):
-        parse_predict()
-        return f"Created InTypeOutType.yaml."
+    def parse_predict(self, predict_filename: str = "predict.py"):
+        parse_predict(predict_filename)
+        return f"Created predict_signature.yaml."
 
     def upload_config(self):
         upload_config()
