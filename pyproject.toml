@@ -33,4 +33,4 @@ include = ["cog*"]
 exclude = ["tests*"]
 
 [project.scripts]
-project-x = "cli:main"  # CLI tool entry point
+project-x = "cli_tools:main"  # CLI tool entry point
