@@ -14,7 +14,7 @@ import shutil
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
 
 class Cli:
-    def init(self, mode: str = "comfyui"):
+    def init_app(self, mode: str = "comfyui"):
         src_path = Path(__file__).parent / "templates"
         dest_path = Path.cwd()
         if mode == "comfyui":
@@ -31,6 +31,9 @@ class Cli:
             f.write(str(auth_token))
         return f"Token saved in {IVRY_CREDENTIAL_DIR / 'token.txt'}"
     
+    def upload_app(self):
+        raise NotImplementedError("Not implemented yet.")
+    
     def retrieve_tunnel_credential(self):
         with open(IVRY_CREDENTIAL_DIR / "token.txt") as f:
             token = f.read()
@@ -46,6 +49,9 @@ class Cli:
         with open(save_path, 'w') as file:
             json.dump(credential, file, indent=4)  # Pretty-print with indent=4        
         return f"Credential saved at {save_path}."
+    
+    def retrieve_tunnel_config(self):
+        raise NotImplementedError("Not implemented yet.")
 
     def start(self, server: str, **kwargs):
         if server == "model":
