@@ -6,9 +6,9 @@
 ```
 /pc/client-api/upload/file
 ```
-1. 服务器收到一个[predict_signature.yaml](predict_signature.yaml)
+1. 服务器收到一[json](#predict_signature-json)
 1. 创建一个**id**
-1. 存储`predict_signature.yaml`并关联**id**
+1. 存储[json](#predict_signature-json)并关联**id**
 1. cloudflare 创建一个tunnel, 使用[cloudflare_api.py](../../src/cloudflare_api.py)里的create_tunnel(**id**)，并存储[返回结果的内容](#存储create_tunnel返回内容)，关联**id**
 1. cloudflare 使用**id**为tunnel创建一个dns_records, 使用[cloudflare_api.py](../../src/cloudflare_api.py)里的create_hostname(**id**, target_content)。target_content为`<TunnelID>.cfargotunnel.com`，TunnelID在上一步获得
 1. [以json形式返回结果](#json返回)
@@ -18,8 +18,53 @@
 - 所需cloudflare api key通过微信发送
 
 #### Task
-- endpoint改成`/pc/client-api/upload/predict_signature`
+- endpoint改成`/pc/client-api/predict_signature`
+- ❗️改为传输json不再上传yaml文件
 - 写一个调用的python例子保存在workflow_test/python下面，命名为predict_signature.py
+- 添加配套修改用的endpoint: `/pc/client-api/predict_signature/{id}`
+
+#### predict_signature json
+```
+{
+  "inputs": [
+    {
+      "name": "prompt",
+      "type": "str",
+      "validation": {
+        "description": "this is a prompt"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "int",
+      "validation": {
+        "description": "seed"
+      }
+    },
+    {
+      "name": "steps",
+      "type": "int",
+      "validation": {
+        "default": "50",
+        "description": "steps",
+        "ge": "0",
+        "le": "1000"
+      }
+    },
+    {
+      "name": "guidance_scale",
+      "type": "float",
+      "validation": {
+        "default": "5.0",
+        "description": "guidance_scale",
+        "ge": "0",
+        "le": "20"
+      }
+    }
+  ],
+  "outputs": "list[Path]"
+}
+```
 
 #### 存储create_tunnel返回内容
 ```
