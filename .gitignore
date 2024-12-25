@@ -27,4 +27,4 @@ InTypeOutType.yaml
 upload
 *.zip
 tunnel_credential*.json
-predict_signature.yaml
+/predict_signature.yaml

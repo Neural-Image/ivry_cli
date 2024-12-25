@@ -6,11 +6,10 @@ import base64
 
 load_dotenv()
 
-def create_hostname(identifier):
+def create_hostname(identifier, target_content):
     # api_email=os.environ.get("CLOUDFLARE_EMAIL")
     api_key = os.environ.get("CLOUDFLARE_DNS_API_TOKEN")
     zone_id = os.environ.get("ZONE_ID")
-    target_content = os.environ.get("TARGET_CONTENT")
 
     res = requests.post(
         f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
