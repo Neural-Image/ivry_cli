@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+from fastapi import FastAPI, File, UploadFile, Request, Response, HTTPException
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -36,7 +36,7 @@ def main():
     #     return {"message": "File uploaded successfully", "file_path": f"/static/{file.filename}"}
     
     @server.put("/upload_file/{file_path}")
-    async def upload_file(file_path: str, request: Request):
+    async def upload_file(file_path: str, request: Request, response: Response):
         """
         Handle file upload via PUT request and save to the static directory.
         """
@@ -54,6 +54,9 @@ def main():
             raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
         logger.info(f"File saved successfully: {file_location}")
+        # logger.info(f"prediction_id: {request.headers['X-Prediction-ID']}")
+
+        response.headers["location"] = f"/upload/{file_path}"
         return {"message": "File uploaded successfully", "file_path": f"/static/{file_path}"}
     
     @server.post("/post_exp")
