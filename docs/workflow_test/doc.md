@@ -227,3 +227,9 @@ def put_file_to_signed_endpoint(
     }
 }
 ```
+
+### 客户端-回传进度(to implement)
+```
+/pc/client-api/models
+```
+返回用户所有的model，基本信息包含model name， model id

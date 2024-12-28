@@ -31,7 +31,19 @@ class Cli:
             f.write(str(auth_token))
         return f"Token saved in {IVRY_CREDENTIAL_DIR / 'token.txt'}"
     
+    def update_app(self, model_id: str):
+        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
+        # call endpoint:/pc/client-api/predict_signature/{id}, to update json        
+        raise NotImplementedError("Not implemented yet.")
+
     def upload_app(self):
+        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
+        # call function in docs/workflow_test/python/predict_signature.py, update json
+        # refer to docs/workflow_test/doc.md, save crediential and config to two separate json files at IVRY_CREDENTIAL_DIR
+        raise NotImplementedError("Not implemented yet.")
+    
+    def list_models(self):
+        # call endpoint:/pc/client-api/models, return model information ids.
         raise NotImplementedError("Not implemented yet.")
     
     def retrieve_tunnel_credential(self):
@@ -51,6 +63,10 @@ class Cli:
         return f"Credential saved at {save_path}."
     
     def retrieve_tunnel_config(self):
+        raise NotImplementedError("Not implemented yet.")
+    
+    def turn_on_tunnel(self):
+        # notebook/comfyui_colab.ipynb
         raise NotImplementedError("Not implemented yet.")
 
     def start(self, server: str, **kwargs):
