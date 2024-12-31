@@ -4,7 +4,7 @@ import mimetypes
 import os
 from typing import Optional
 from urllib.parse import urlparse
-
+from util import get_apikey
 import requests
 
 
@@ -57,8 +57,10 @@ def put_file_to_signed_endpoint(
     headers = {
         "Content-Type": content_type,
     }
+    apikey = get_apikey()
     if prediction_id is not None:
         headers["X-Prediction-ID"] = prediction_id
+        headers["X-API-KEY"] = str(apikey)
 
     resp = client.put(
         ensure_trailing_slash(endpoint) + f"{prediction_id}_{id}_{filename}",
