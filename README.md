@@ -54,3 +54,5 @@ cloudflared tunnel --config tunnel_config.json run 7a32c54f-f326-40a5-8984-0ab49
 1. windows version
 2. better command lines for start server
 3. better template code for comfyUI
+4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？
+5. project-x stop
