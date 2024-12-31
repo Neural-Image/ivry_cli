@@ -1,6 +1,8 @@
 import ast
 import yaml
 from pathlib import Path
+import json
+
 
 def clean_quotes(value):
     if isinstance(value, str) and value.startswith("'") and value.endswith("'"):
@@ -8,7 +10,7 @@ def clean_quotes(value):
     return value
 
 
-def parse_predict(predict_filename):
+def parse_predict(predict_filename, save_type='yaml'):
     with open(predict_filename, encoding="utf-8") as file:
         source_code = file.read()
 
@@ -60,5 +62,11 @@ def parse_predict(predict_filename):
     }
 
     # Optional: Save YAML to a file
-    with open('predict_signature.yaml', 'w') as file:
-        yaml.dump(data, file, default_flow_style=False)
+    if save_type == "yaml":
+        with open('predict_signature.yaml', 'w') as file:
+            yaml.dump(data, file, default_flow_style=False)
+
+    elif save_type == "json":
+        with open('predict_signature.json', 'w') as file:
+            json.dump(data, file)
+

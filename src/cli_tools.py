@@ -10,15 +10,38 @@ from communicate import upload_config
 import requests
 import json
 import shutil
+from util import get_apikey
 
+#1. save credential and config file to model dir, save token to .ivry
+#2. read token to get apikey
+#3. formatting list_model
+
+
+#save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
+IVRY_UPLOAD_URL = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/"
+# only use predict.py
+IVRY_PREDICT_FILE = "predict.py"
+
 
 class Cli:
-    def init_app(self, mode: str = "comfyui"):
+    def init_app(self, project_name: str, mode: str = "comfyui"):
+        # Add project_name to name the init project
         src_path = Path(__file__).parent / "templates"
-        dest_path = Path.cwd()
+        dest_path = Path.cwd() / project_name
+        # create new dir for init project
+        if not dest_path.exists():
+            dest_path.mkdir(parents=True, exist_ok=True)
+            print(f"Directory {dest_path} created.")
+        else:
+            print(f"Directory {dest_path} already exists.")
+             
         if mode == "comfyui":
             shutil.copy(src_path / "predict_comfyui.py", dest_path / "predict.py")
+            shutil.copy(src_path / "cog.yaml", dest_path / "cog.yaml")
+        elif mode == "model":
+            # Add model template predict.py
+            shutil.copy(src_path / "predict.py", dest_path / "predict.py")
             shutil.copy(src_path / "cog.yaml", dest_path / "cog.yaml")
         else:
             raise ValueError(f"mode {mode} is unknown.")
@@ -31,9 +54,92 @@ class Cli:
             f.write(str(auth_token))
         return f"Token saved in {IVRY_CREDENTIAL_DIR / 'token.txt'}"
     
-    def upload_app(self):
-        raise NotImplementedError("Not implemented yet.")
+    def update_app(self, model_id: str, model_name: str):
+        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
+        apikey = get_apikey()
+        predict_path = Path.cwd() / model_name
+        if not predict_path.exists():
+            raise Exception("Sorry, you need to init the project first.")
+        else:
+            parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
+        print("generating predict_signature.json")
+        headers = {
+        'X-API-KEY': str(apikey),
+        'Content-Type': 'application/json',
+        }
+        url = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/" + str(model_id)
+        with open("./predict_signature.json", "r") as json_file:
+            data = json.load(json_file)
+        payload = json.dumps(data, indent=4)
+        
+        # call endpoint:/pc/client-api/predict_signature/{id}, to update json        
+        response = requests.request("POST", url, headers=headers, data=payload)
+        json_data = response.json()
+        print(json_data.get("httpStatus"))
+        print(json_data.get("data"))
+        
+        
     
+    def upload_app(self, model_name: str):
+        # read token.txt
+        # Reading the file
+        
+        apikey = get_apikey()
+        print(f"Auth token: {apikey}")
+        predict_path = Path.cwd() / model_name
+        if not predict_path.exists():
+            raise Exception("Sorry, you need to init the project first.")
+        else:
+        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
+            parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
+        print("generating predict_signature.json")
+        # call function in docs/workflow_test/python/predict_signature.py, update json
+        #页面获取
+
+        headers = {
+        'X-API-KEY': str(apikey),
+        'Content-Type': 'application/json',
+        }
+        url = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/"
+        with open("./predict_signature.json", "r") as json_file:
+            data = json.load(json_file)
+        payload = json.dumps(data, indent=4)
+        response = requests.request("POST", url, headers=headers, data=payload)
+        json_data = response.json()
+        print(json_data.get("httpStatus"))
+        # refer to docs/workflow_test/doc.md, save crediential and config to two separate json files at IVRY_CREDENTIAL_DIR
+        IVRY_CREDENTIAL_DIR.mkdir(parents=True, exist_ok=True)
+        credential = json_data["data"]["credential"]
+        config = json_data["data"]["config"]
+        # Save `credential` as a JSON file
+        credential_file = predict_path / "tunnel_credential.json"
+        with open(credential_file, "w") as file:
+            json.dump(credential, file, indent=4)
+
+        # Save `config` as a JSON file
+        config_file = predict_path / "tunnel_config.json"
+        with open(config_file, "w") as file:
+            json.dump(config, file, indent=4)
+
+        print(f"Credential saved to: {credential_file}")
+        print(f"Config saved to: {config_file}")
+    
+    
+    
+    
+    def list_models(self):
+        # call endpoint:/pc/client-api/models, return model information ids.
+        apikey = get_apikey()
+        headers = {
+        'X-API-KEY': str(apikey),
+        'Content-Type': 'application/json',
+        }
+        url = "https://test-pc.neuralimage.net/pc/client-api/models"
+        response = requests.request("POST", url, headers=headers)
+        json_data = response.json()
+        print(json_data.get("httpStatus"))
+        print(json.dumps(json_data.get("data"), indent=4))
+
     def retrieve_tunnel_credential(self):
         with open(IVRY_CREDENTIAL_DIR / "token.txt") as f:
             token = f.read()
@@ -51,6 +157,10 @@ class Cli:
         return f"Credential saved at {save_path}."
     
     def retrieve_tunnel_config(self):
+        raise NotImplementedError("Not implemented yet.")
+    
+    def turn_on_tunnel(self):
+        # notebook/comfyui_colab.ipynb
         raise NotImplementedError("Not implemented yet.")
 
     def start(self, server: str, **kwargs):

@@ -28,7 +28,9 @@ def get_images(ws, client_id, prompt):
     output_images = {}
     while True:
         out = ws.recv()
+        
         if isinstance(out, str):
+            print(out)
             message = json.loads(out)
             if message['type'] == 'executing':
                 data = message['data']
@@ -60,6 +62,8 @@ def get_images(ws, client_id, prompt):
         output_images[node_id] = images_output        
 
     return output_images
+
+
 
 #Commented out code to display the output images:
 
