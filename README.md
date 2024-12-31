@@ -40,6 +40,7 @@ project-x update_app --model_id {model_id} --model_name {project name} #example:
 `TODO: add a new command for start app + start cloudflare`
 1. start your app:
 ```bash
+cd {project name}
 project-x start model --upload-url=https://test-pc.neuralimage.net/pc/client-api/upload
 ```
 2. start cloudflare
