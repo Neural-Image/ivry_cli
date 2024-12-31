@@ -1,4 +1,4 @@
-### installation
+# installation
 1. clone the repo
 2. install the cli:
 ```bash
@@ -6,7 +6,7 @@ cd ivry_cli
 pip install -e .
 ```
 
-### Login from cli
+# Login from cli
 1. get your apikey from our website
 2. login by cli:
 ```bash
