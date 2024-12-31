@@ -4,7 +4,10 @@
 
 ### Login from cli
 1. get your apikey from our website
-2. ```project-x login --auth_token {your_apikey}```
+2.
+'''
+project-x login --auth_token {your_apikey}
+'''
 
 ### Init your app
 project-x init_app --project_name colab_test --mode model
