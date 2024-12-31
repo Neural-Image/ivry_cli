@@ -51,6 +51,6 @@ cloudflared tunnel --config tunnel_config.json run 7a32c54f-f326-40a5-8984-0ab49
 ```
 
 ## TODO:
-1. windos version
+1. windows version
 2. better command lines for start server
 3. better template code for comfyUI
