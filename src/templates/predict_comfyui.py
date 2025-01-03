@@ -2,7 +2,8 @@ from cog import BasePredictor, Input, Path
 import tempfile
 from PIL import Image
 from time import sleep
-
+import requests
+import random
 import websocket #NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
 import uuid
 import json
@@ -13,122 +14,69 @@ from typing import List
 from dotenv import load_dotenv
 load_dotenv()
 
-COMFYUI_PATH = os.environ.get("COMFYUI_PATH", "")
+# 1.Please put your comfyUI path here:
+COMFYUI_PATH = "/workspace/ComfyUI"
+# 2.Please put your comfyUI port here: (by defalut is 127.0.0.1:8188 if you run "python main.py --listen")
 server_address = "127.0.0.1:8188"
+
 
 class Predictor(BasePredictor):
     def setup(self):
         pass
+
+    
+
+    # 3.put your inputs here:
+    """
+    put the inputs of your app here: 
+    some common inputs:
+        image: Path = Input(description="Grayscale input image"),
+        prompt: str = Input(default="hello", max_length=1000, description="this is a prompt"),
+        steps: int = Input(default=50, ge=0, le=1000, description="steps"),
+        guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
+    """
     def predict(self,
-                prompt: str = Input(description="this is a prompt"),
-                seed: int = Input(description="seed"),
-                steps: int = Input(default=50, ge=0, le=1000, description="steps"),
-                guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
-    ) -> list[Path]:
+                image_user: Path = Input(description="user input image"),
+                prompt: str = Input(description="Describ what you want!"),
+    ) -> Path:
         client_id = str(uuid.uuid4())
-        prompt_text = """
-        {
-            "3": {
-                "class_type": "KSampler",
-                "inputs": {
-                    "cfg": 8,
-                    "denoise": 1,
-                    "latent_image": [
-                        "5",
-                        0
-                    ],
-                    "model": [
-                        "4",
-                        0
-                    ],
-                    "negative": [
-                        "7",
-                        0
-                    ],
-                    "positive": [
-                        "6",
-                        0
-                    ],
-                    "sampler_name": "euler",
-                    "scheduler": "normal",
-                    "seed": 8566257,
-                    "steps": 20
-                }
-            },
-            "4": {
-                "class_type": "CheckpointLoaderSimple",
-                "inputs": {
-                    "ckpt_name": "v1-5-pruned-emaonly-fp16.safetensors"
-                }
-            },
-            "5": {
-                "class_type": "EmptyLatentImage",
-                "inputs": {
-                    "batch_size": 1,
-                    "height": 512,
-                    "width": 512
-                }
-            },
-            "6": {
-                "class_type": "CLIPTextEncode",
-                "inputs": {
-                    "clip": [
-                        "4",
-                        1
-                    ],
-                    "text": "masterpiece best quality girl"
-                }
-            },
-            "7": {
-                "class_type": "CLIPTextEncode",
-                "inputs": {
-                    "clip": [
-                        "4",
-                        1
-                    ],
-                    "text": "bad hands"
-                }
-            },
-            "8": {
-                "class_type": "VAEDecode",
-                "inputs": {
-                    "samples": [
-                        "3",
-                        0
-                    ],
-                    "vae": [
-                        "4",
-                        2
-                    ]
-                }
-            },
-            "9": {
-                "class_type": "SaveImage",
-                "inputs": {
-                    "filename_prefix": "ComfyUI",
-                    "images": [
-                        "8",
-                        0
-                    ]
-                }
-            }
-        }
-        """   
+        # 4.put your workflow api path here:
+        workflow_file = "sticker.json"
 
-        prompt_config = json.loads(prompt_text)
-        #set the text prompt for our positive CLIPTextEncode
-        prompt_config["6"]["inputs"]["text"] = prompt
+        with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
+            prompt_config = json.load(workflow_file)
 
-        #set the seed for our KSampler node
-        prompt_config["3"]["inputs"]["seed"] = seed
+        # 5.put the input nodes here
+        '''
+        In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
+        '''
+        prompt_config["326"]["inputs"]["image"] = str(image_user) # user input
+        prompt_config["518"]["inputs"]["text"] = prompt # user input
+        prompt_config["658"]["inputs"]["image"] = '/workspace/ComfyUI/input/white1024.png' # taking assets
+        prompt_config["639"]["inputs"]["image"] = '/workspace/ComfyUI/input/final51_03626_.png' # taking assets
+
+
+
+        # This part random seeds for every nodes that uses seed, if you don't want that just delete this part
+        for node_id, node in prompt_config.items():
+            inputs = node.get("inputs", {})
+            seed_keys = ["seed", "noise_seed", "rand_seed"]
+            for seed_key in seed_keys:
+                if seed_key in inputs and isinstance(inputs[seed_key], (int, float)):
+                    new_seed = random.randint(0, 2**32 - 1)
+                    print(f"Randomising {seed_key} to {new_seed}")
+                    inputs[seed_key] = new_seed
+
+        # This part is running comfyUI with your workflow
         ws = websocket.WebSocket()
         ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
         images = get_images(ws, client_id, prompt_config)
-
-        ws.close()           
+        ws.close()
+        print('inference done')
         img_path_list = []
         for node_id in images:
             for image_path in images[node_id]:
                 img_path_list.append(image_path)
         output_path_list = [Path(os.path.join(COMFYUI_PATH, "output", p)) for p in img_path_list] * 2
-        return output_path_list
+        print("output_path_list", output_path_list)
+        return [output_path_list[0]] 

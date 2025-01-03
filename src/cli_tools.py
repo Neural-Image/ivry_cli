@@ -11,6 +11,8 @@ import requests
 import json
 import shutil
 from util import get_apikey
+import subprocess
+import signal
 
 #1. save credential and config file to model dir, save token to .ivry
 #2. read token to get apikey
@@ -125,8 +127,51 @@ class Cli:
         print(f"Config saved to: {config_file}")
     
     
+    def start_server(self):
+        with open("client.log", "w") as log_file:
+            p_cf = subprocess.Popen(
+                ["project-x", "start", "model","--upload-url=https://test-pc.neuralimage.net/pc/client-api/upload"],
+                # ["project-x", "start", "model", "--upload_url", ""],
+                stdout=log_file,
+                stderr=subprocess.STDOUT  # Redirect stderr to the same log file
+            )
+        print("client is running. Logs are being written to client.log.")
+
+        with open("cloudflare.log", "w") as log_file:
+            p_cf = subprocess.Popen(
+                ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
+                stdout=log_file,
+                stderr=subprocess.STDOUT  # Redirect stderr to the same log file
+            )
+        print("cloudflare is running. Logs are being written to cloudflare.log.")
+
+    def stop_server(self):
+    # Helper function to terminate a process by its name
+        def terminate_process(name):
+            try:
+                # List all processes and find those matching the name
+                result = subprocess.run(["pgrep", "-f", name], stdout=subprocess.PIPE, text=True)
+                pids = result.stdout.strip().split("\n")
+                if pids:
+                    for pid in pids:
+                        os.kill(int(pid), signal.SIGTERM)
+                    print(f"Terminated {name} processes with PIDs: {', '.join(pids)}")
+                else:
+                    print(f"No processes found for {name}")
+            except Exception as e:
+                print(f"Error stopping {name}: {e}")
+
+        # Terminate `project-x` process
+        terminate_process("project-x start model")
+
+        # Terminate `cloudflared` process
+        terminate_process("cloudflared tunnel --config tunnel_config.json run")
+        
+        print("All server processes have been stopped.")
     
-    
+
+
+
     def list_models(self):
         # call endpoint:/pc/client-api/models, return model information ids.
         apikey = get_apikey()

@@ -1,0 +1,13 @@
+{
+    "token": "eyJhIjoiNmExYTRjZGRhZjE1MDViODkxNTEzNTc5MTI0NDcwM2UiLCJ0IjoiZWViMDU5YzUtYTY0Yy00MTczLWFiY2YtOWU1OWQ1ZGQwNmViIiwicyI6Iko4UjAwN2pFWmR3cjJpTGZtUXd4VElycExDT0xLU1QwZUMrVk9OZk1NZVFUOEtyMjRLcFF0SWJrU1g4dWtUQ1dacWxHZnpLd1dQblpDb01CWGVTRmRRPT0ifQ==",
+    "ingress": [
+        {
+            "hostname": "ivrymodel83.lormul.org",
+            "service": "http://localhost:3009"
+        },
+        {
+            "service": "http_status:404"
+        }
+    ],
+    "credentials-file": "tunnel_credential.json"
+}
