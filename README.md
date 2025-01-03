@@ -58,3 +58,4 @@ cloudflared tunnel --config tunnel_config.json run 7a32c54f-f326-40a5-8984-0ab49
 5. project-x stop
 6. cloudflare 验证，cloudflare 调用用户本机验证
 7. more templates to test
+8. minor bugs: a. stop generate unnessasary files
