@@ -25,6 +25,11 @@ After you finish editing 'predict.py' in your project, you can upload your app t
 ```bash
 project-x upload_app --model_name {project name} #example: colab_test
 ```
+or
+```bash
+cd {project name}
+project-x upload_app
+```
 
 ## Check your model status
 You can check your uploaded models on our websites:
@@ -35,19 +40,24 @@ project-x list_models
 ```bash
 project-x update_app --model_id {model_id} --model_name {project name} #example: project-x update_app --model_id ivrymodel67 --model_name colab_test
 ```
-
-## Start to host your app
-`TODO: project-x start_server / project-x stop_server`
-1. start your app:
+or
 ```bash
 cd {project name}
-project-x start model --upload-url=https://test-pc.neuralimage.net/pc/client-api/upload
+project-x update_app --model_id {model_id}
 ```
-2. start cloudflare
+
+
+## Start to host your app
+start your app:
 ```bash
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared-linux-amd64.deb
-cloudflared tunnel --config tunnel_config.json run 7a32c54f-f326-40a5-8984-0ab49798562f
+cd {project name}
+project-x start_server
+```
+stop your app:
+```bash
+project-x stop_server
 ```
 
 ## TODO:
