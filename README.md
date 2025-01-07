@@ -76,3 +76,5 @@ project-x stop_server
 **7. more templates to test**
    
 **8. minor bugs: a. stop generate unnessasary files**
+
+~~9. better command lines for upload/update server~~
