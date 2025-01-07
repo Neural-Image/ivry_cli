@@ -28,3 +28,5 @@ upload
 *.zip
 tunnel_credential*.json
 /predict_signature.yaml
+/ubuntu_test
+/ubuntu_test_1

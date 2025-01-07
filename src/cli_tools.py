@@ -14,11 +14,6 @@ from util import get_apikey
 import subprocess
 import signal
 
-#1. save credential and config file to model dir, save token to .ivry
-#2. read token to get apikey
-#3. formatting list_model
-
-
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
 IVRY_UPLOAD_URL = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/"
@@ -82,14 +77,15 @@ class Cli:
         
         
     
-    def upload_app(self, model_name: str):
+    def upload_app(self, model_name: str = ''):
         # read token.txt
         # Reading the file
         
         apikey = get_apikey()
         print(f"Auth token: {apikey}")
         predict_path = Path.cwd() / model_name
-        if not predict_path.exists():
+        tmp = predict_path / IVRY_PREDICT_FILE
+        if not tmp.exists():
             raise Exception("Sorry, you need to init the project first.")
         else:
         # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
