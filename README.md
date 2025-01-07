@@ -37,7 +37,7 @@ project-x update_app --model_id {model_id} --model_name {project name} #example:
 ```
 
 ## Start to host your app
-`TODO: add a new command for start app + start cloudflare`
+`TODO: project-x start_server / project-x stop_server`
 1. start your app:
 ```bash
 cd {project name}
