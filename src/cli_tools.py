@@ -51,11 +51,12 @@ class Cli:
             f.write(str(auth_token))
         return f"Token saved in {IVRY_CREDENTIAL_DIR / 'token.txt'}"
     
-    def update_app(self, model_id: str, model_name: str):
+    def update_app(self, model_id: str, model_name: str = ''):
         # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
         apikey = get_apikey()
         predict_path = Path.cwd() / model_name
-        if not predict_path.exists():
+        tmp = predict_path / IVRY_PREDICT_FILE
+        if not tmp.exists():
             raise Exception("Sorry, you need to init the project first.")
         else:
             parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
@@ -109,6 +110,11 @@ class Cli:
         IVRY_CREDENTIAL_DIR.mkdir(parents=True, exist_ok=True)
         credential = json_data["data"]["credential"]
         config = json_data["data"]["config"]
+        # TMP: add token to config
+        # Replace "tunnel" key with "token" and update its value
+        config["token"] = credential["token"]  # Add the new key with the updated value
+        del config["tunnel"]  # Remove the old "tunnel" key 
+
         # Save `credential` as a JSON file
         credential_file = predict_path / "tunnel_credential.json"
         with open(credential_file, "w") as file:
