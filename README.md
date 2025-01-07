@@ -71,9 +71,6 @@ project-x stop_server
 ~~4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？~~
 
 ~~5. project-x stop~~
-
 6. cloudflare 验证，cloudflare 调用用户本机验证
-   
 7. more templates to test
-   
 8. minor bugs: a. stop generate unnessasary files
