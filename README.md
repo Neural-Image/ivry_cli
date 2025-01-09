@@ -19,6 +19,9 @@ Current version support --mode comfyui/model
 project-x init_app --project_name {project name} --mode {your app mode} #example: project-x init_app --project_name colab_test --mode model
 ```
 
+Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
+
+
 ## Upload your app
 `TODO: add cd to dir version`
 After you finish editing 'predict.py' in your project, you can upload your app to our website:
