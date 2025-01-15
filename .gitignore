@@ -30,3 +30,7 @@ tunnel_credential*.json
 /predict_signature.yaml
 /ubuntu_test
 /ubuntu_test_1
+/removebg
+/removebg_ivry
+/videotest
+/ubuntu_test/tunnel_config.json

@@ -55,6 +55,11 @@ class Predictor(BasePredictor):
         prompt_config["658"]["inputs"]["image"] = '/workspace/ComfyUI/input/white1024.png' # taking assets
         prompt_config["639"]["inputs"]["image"] = '/workspace/ComfyUI/input/final51_03626_.png' # taking assets
 
+        '''
+        If your output node is not from comfy core, you need to define an output path 
+        
+        promtp_config["xxx"]["inputs"]["filename_prefix"] = path/to/your/output/file
+        '''
 
 
         # This part random seeds for every nodes that uses seed, if you don't want that just delete this part
@@ -70,6 +75,7 @@ class Predictor(BasePredictor):
         # This part is running comfyUI with your workflow
         ws = websocket.WebSocket()
         ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+        # If your output is image with comfy Core node:
         images = get_images(ws, client_id, prompt_config)
         ws.close()
         print('inference done')
@@ -77,6 +83,14 @@ class Predictor(BasePredictor):
         for node_id in images:
             for image_path in images[node_id]:
                 img_path_list.append(image_path)
-        output_path_list = [Path(os.path.join(COMFYUI_PATH, "output", p)) for p in img_path_list] * 2
+        output_path_list = [Path(os.path.join(COMFYUI_PATH, "output", p)) for p in img_path_list]
         print("output_path_list", output_path_list)
+        # If your output is video or image without comfy Core Node:
+        '''
+        # Define a output path for the result:
+
+
+        '''
+
+
         return [output_path_list[0]] 
