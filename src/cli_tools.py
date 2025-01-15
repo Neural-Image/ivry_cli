@@ -16,7 +16,7 @@ import signal
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
-IVRY_UPLOAD_URL = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/"
+IVRY_UPLOAD_URL = "https://test.ivry.co/pc/client-api/predict_signature/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 
@@ -65,7 +65,7 @@ class Cli:
         'X-API-KEY': str(apikey),
         'Content-Type': 'application/json',
         }
-        url = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/" + str(model_id)
+        url = "https://test.ivry.co/pc/client-api/predict_signature/" + str(model_id)
         with open("./predict_signature.json", "r") as json_file:
             data = json.load(json_file)
         payload = json.dumps(data, indent=4)
@@ -99,7 +99,7 @@ class Cli:
         'X-API-KEY': str(apikey),
         'Content-Type': 'application/json',
         }
-        url = "https://test-pc.neuralimage.net/pc/client-api/predict_signature/"
+        url = "https://test.ivry.co/pc/client-api/predict_signature/"
         with open("./predict_signature.json", "r") as json_file:
             data = json.load(json_file)
         payload = json.dumps(data, indent=4)
@@ -132,7 +132,7 @@ class Cli:
     def start_server(self):
         with open("client.log", "w") as log_file:
             p_cf = subprocess.Popen(
-                ["project-x", "start", "model","--upload-url=https://test-pc.neuralimage.net/pc/client-api/upload"],
+                ["project-x", "start", "model","--upload-url=https://test.ivry.co/pc/client-api/upload"],
                 # ["project-x", "start", "model", "--upload_url", ""],
                 stdout=log_file,
                 stderr=subprocess.STDOUT  # Redirect stderr to the same log file

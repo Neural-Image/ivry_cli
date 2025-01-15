@@ -5,7 +5,7 @@ import json
 import urllib.request
 import urllib.parse
 
-server_address = "127.0.0.1:8188"
+server_address = "127.0.0.1:8190"
 
 def queue_prompt(prompt, client_id):
     p = {"prompt": prompt, "client_id": client_id}
@@ -52,12 +52,18 @@ def get_images(ws, client_id, prompt):
     #             image_data = get_image(image['filename'], image['subfolder'], image['type'])
     #             images_output.append(image_data)
     #     output_images[node_id] = images_output
-
+    print('history :', history)
     for node_id in history['outputs']:
         node_output = history['outputs'][node_id]
         images_output = []
         if 'images' in node_output:
             for image in node_output['images']:
+                images_output.append(image['filename'])
+        if 'gifs' in node_output:
+            for image in node_output['gifs']:
+                images_output.append(image['filename'])
+        if 'videos' in node_output:
+            for image in node_output['videos']:
                 images_output.append(image['filename'])
         output_images[node_id] = images_output        
 

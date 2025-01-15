@@ -19,11 +19,20 @@ Current version support --mode comfyui/model
 project-x init_app --project_name {project name} --mode {your app mode} #example: project-x init_app --project_name colab_test --mode model
 ```
 
+Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
+
+
 ## Upload your app
 `TODO: add cd to dir version`
+# Please put absolute dir in predict.py #
 After you finish editing 'predict.py' in your project, you can upload your app to our website:
 ```bash
 project-x upload_app --model_name {project name} #example: colab_test
+```
+or
+```bash
+cd {project name}
+project-x upload_app
 ```
 
 ## Check your model status
@@ -35,27 +44,41 @@ project-x list_models
 ```bash
 project-x update_app --model_id {model_id} --model_name {project name} #example: project-x update_app --model_id ivrymodel67 --model_name colab_test
 ```
-
-## Start to host your app
-`TODO: project-x start_server / project-x stop_server`
-1. start your app:
+or
 ```bash
 cd {project name}
-project-x start model --upload-url=https://test-pc.neuralimage.net/pc/client-api/upload
+project-x update_app --model_id {model_id}
 ```
-2. start cloudflare
+
+
+## Start to host your app
+start your app:
 ```bash
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared-linux-amd64.deb
-cloudflared tunnel --config tunnel_config.json run 7a32c54f-f326-40a5-8984-0ab49798562f
+cd {project name}
+project-x start_server
+```
+stop your app:
+```bash
+project-x stop_server
 ```
 
 ## TODO:
-1. windows version
-2. better command lines for start server
-3. better template code for comfyUI
-4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？
-5. project-x stop
-6. cloudflare 验证，cloudflare 调用用户本机验证
-7. more templates to test
-8. minor bugs: a. stop generate unnessasary files
+**1. windows version**
+
+~~2. better command lines for start server~~
+
+**3. better template code for comfyUI**
+
+~~4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？~~
+
+~~5. project-x stop~~
+
+**6. cloudflare 验证，cloudflare 调用用户本机验证**
+   
+**7. more templates to test**
+   
+**8. minor bugs: a. stop generate unnessasary files**
+
+~~9. better command lines for upload/update server~~
