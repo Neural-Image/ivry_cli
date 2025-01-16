@@ -33,7 +33,7 @@ Your project folder should generated, and you can find predict.py in it. Next st
 
 ## Upload your project
 `TODO: add cd to dir version`
-# Please put absolute dir in predict.py #
+### Please put absolute dir in predict.py ###
 
 Your predict.py location is under /ivry_cli/{project name}/predict.py 
 You need to edit it based on the comments
@@ -79,6 +79,13 @@ project-x start_server
 stop your app:
 ```bash
 project-x stop_server
+```
+
+### Trouble shot: ###
+if your project-x start server encounter websocket problem you can try:
+```bash
+pip uninstall websockets
+pip install websocket-client
 ```
 
 ## TODO:
