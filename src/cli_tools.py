@@ -181,7 +181,7 @@ class Cli:
         'X-API-KEY': str(apikey),
         'Content-Type': 'application/json',
         }
-        url = "https://test-pc.neuralimage.net/pc/client-api/models"
+        url = "https://test.ivry.co/pc/client-api/models"
         response = requests.request("POST", url, headers=headers)
         json_data = response.json()
         print(json_data.get("httpStatus"))
