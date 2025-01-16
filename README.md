@@ -16,7 +16,7 @@ project-x login --auth_token {your_apikey}
 ## Init your app
 Current version support --mode comfyui/model
 ```bash
-project-x init_app --project_name {project name} --mode {your app mode} #example: project-x init_app --project_name colab_test --mode model
+project-x init_app --project_name {project name} --mode {comfyui/model} #example: project-x init_app --project_name colab_test --mode model
 ```
 
 Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
