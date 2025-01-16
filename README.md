@@ -34,7 +34,11 @@ Your project folder should generated, and you can find predict.py in it. Next st
 ## Upload your app
 `TODO: add cd to dir version`
 # Please put absolute dir in predict.py #
+
+Your predict.py location is under /ivry_cli/{project name}/predict.py 
+You need to edit it based on the comments
 After you finish editing 'predict.py' in your project, you can upload your app to our website:
+
 ```bash
 project-x upload_app --model_name {project name} #example: colab_test
 ```
