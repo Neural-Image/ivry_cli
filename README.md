@@ -67,8 +67,12 @@ project-x update_app --model_id {model_id}
 ## Start to host your project
 start your app:
 ```bash
+# linux:
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared-linux-amd64.deb
+# macOS:
+brew install cloudflare/cloudflare/cloudflared
+
 cd {project name}
 project-x start_server
 ```
