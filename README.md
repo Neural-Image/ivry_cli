@@ -18,6 +18,15 @@ Current version support --mode comfyui/model
 ```bash
 project-x init_app --project_name {project name} --mode {comfyui/model} #example: project-x init_app --project_name colab_test --mode model
 ```
+if you are using comfyUI:
+```bash
+project-x init_app --project_name {project name} --mode comfyui
+```
+
+if you are using model:
+```bash
+project-x init_app --project_name {project name} --mode model
+```
 
 Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
 
