@@ -13,7 +13,7 @@ pip install -e .
 project-x login --auth_token {your_apikey}
 ```
 
-## Init your app
+## Init your project
 Current version support --mode comfyui/model
 ```bash
 project-x init_app --project_name {project name} --mode {comfyui/model} #example: project-x init_app --project_name colab_test --mode model
@@ -31,7 +31,7 @@ project-x init_app --project_name {project name} --mode model
 Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
 
 
-## Upload your app
+## Upload your project
 `TODO: add cd to dir version`
 # Please put absolute dir in predict.py #
 
@@ -64,7 +64,7 @@ project-x update_app --model_id {model_id}
 ```
 
 
-## Start to host your app
+## Start to host your project
 start your app:
 ```bash
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
