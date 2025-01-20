@@ -34,3 +34,5 @@ tunnel_credential*.json
 /removebg_ivry
 /videotest
 /ubuntu_test/tunnel_config.json
+/ivry_test
+/ivry

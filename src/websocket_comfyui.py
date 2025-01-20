@@ -4,8 +4,13 @@
 import json
 import urllib.request
 import urllib.parse
+import logging
+import time
 
-server_address = "127.0.0.1:8190"
+server_address = "127.0.0.1:8188"
+LOG_FILE = "client.log"
+MIN_INTERVAL = 1  # 最小间隔时间
+
 
 def queue_prompt(prompt, client_id):
     p = {"prompt": prompt, "client_id": client_id}
@@ -26,11 +31,23 @@ def get_history(prompt_id):
 def get_images(ws, client_id, prompt):
     prompt_id = queue_prompt(prompt, client_id)['prompt_id']
     output_images = {}
+    logging.basicConfig(
+        level=logging.INFO,  # 设置日志级别为 INFO
+        format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
+        handlers=[
+            logging.FileHandler(LOG_FILE),  # 输出到 client.log 文件
+            logging.StreamHandler()  # 同时输出到控制台（可选）
+        ]
+    )
+    logger = logging.getLogger("predict_logger")
+    last_print_time = 0 
     while True:
         out = ws.recv()
-        
+        current_time = time.time()
         if isinstance(out, str):
-            print(out)
+            if current_time - last_print_time >= MIN_INTERVAL:
+                logger.info(out) 
+                last_print_time = current_time
             message = json.loads(out)
             if message['type'] == 'executing':
                 data = message['data']
@@ -52,7 +69,7 @@ def get_images(ws, client_id, prompt):
     #             image_data = get_image(image['filename'], image['subfolder'], image['type'])
     #             images_output.append(image_data)
     #     output_images[node_id] = images_output
-    print('history :', history)
+    #print('history :', history)
     for node_id in history['outputs']:
         node_output = history['outputs'][node_id]
         images_output = []
