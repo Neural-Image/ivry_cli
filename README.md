@@ -106,3 +106,13 @@ pip install websocket-client
 **8. minor bugs: a. stop generate unnessasary files**
 
 ~~9. better command lines for upload/update server~~
+
+~~10. log trunction~~ 1/20
+
+~~11. logging interval~~ 1/20
+
+~~11. Organizing more hyperparameters~~ 1/20
+
+
+
+
