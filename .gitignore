@@ -36,3 +36,4 @@ tunnel_credential*.json
 /ubuntu_test/tunnel_config.json
 /ivry_test
 /ivry
+gradio_predict.py
