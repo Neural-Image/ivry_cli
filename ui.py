@@ -519,4 +519,35 @@ with gr.Blocks() as demo:
             login_button = gr.Button("初始化")
             login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
 
+            gr.Markdown("## wsl notes")
+            instructions = """
+                # How to Install WSL and Ubuntu 20.04
+
+                ## Step 1: Enable WSL and Virtualization Features
+                1. Open **PowerShell** as Administrator.
+                2. Run the following commands:
+                    ```
+                    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+                    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+                    ```
+                3. Restart your computer.
+
+                ## Step 2: Install Ubuntu 20.04
+                You can install Ubuntu 20.04 in two ways:
+                1. **Using Microsoft Store**:
+                - Open Microsoft Store.
+                - Search for "Ubuntu 20.04".
+                - Click "Get" or "Install".
+                2. **Using PowerShell**:
+                - Run the following command:
+                    ```
+                    wsl --install -d Ubuntu-20.04
+                    ```
+
+                ## Step 3: Set Up Ubuntu
+                1. Launch Ubuntu.
+                2. Follow the on-screen instructions to set up your username and password.
+                """
+            gr.Markdown(instructions)
+
 demo.launch()
