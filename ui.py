@@ -12,27 +12,43 @@ inputs_counter = {
     "Path":0 ,
     "bool":0
 }
+workflow_parsing = ""
+final_inputs = []
+input_dict = {}
+input_type = {}
 
-def generate_predict_file(dir_comfyui, port_comfyui, input_section, logic_section):
+def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     # 读取模板文件内容
     input_parameter = ""
     with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
         content = template_file.read()
+    # print(input_section)
+    input_section = input_section.split(',')
+    for index, i in enumerate(input_section):
+        if "\n" in i:
+            input_section[index] = i.replace("\n", "")
+        if i == '':
+            input_section.pop(index)
     print(input_section)
-    input_section = ast.literal_eval(input_section)
+    # ### Inputs 
 
-    ### Inputs 
-
-
+    print("input_dict",input_dict)
     for i in input_section:
-        input_parameter = input_parameter + str(i) + ": " + str(i).split("_")[0] + "= Input(description='user input image'),\n                "  
+        #input_dict[]
+        input_parameter = input_parameter + 'ivry_' + i + ",\n                "  
     print(input_parameter)
+    
     
     ###
 
     ### workflow json
 
-
+    logic_section = ""
+    for i in input_dict.keys():
+        if input_type[i] == 'Path':
+            logic_section += f"prompt_config['{i}']['inputs']['{input_dict[i]}'] = str(ivry_{i}_{input_dict[i]})" +  "\n        "
+        else:
+            logic_section += f"prompt_config['{i}']['inputs']['{input_dict[i]}'] = ivry_{i}_{input_dict[i]}" +  "\n        "
 
 
 
@@ -83,7 +99,20 @@ def delete_selection(option_to_delete):
 
 # 处理最终选择后的输出
 def process_selection(main_selection, sub_selection, sub_sub_selection):
-    return f"Main Selection: {main_selection}, Sub Selection: {sub_selection}, Sub-Sub Selection: {sub_sub_selection}"
+    global workflow_parsing
+    global final_inputs
+    global input_dict
+    global input_type
+    if (main_selection.split(' ')[0]) not in final_inputs:
+        input_dict[main_selection.split(' ')[0]] = sub_selection
+        input_type[main_selection.split(' ')[0]] = sub_sub_selection
+        final_inputs.append(main_selection.split(' ')[0] + sub_selection)
+        if len(final_inputs) == 1:
+            workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + "= Input(description=''),"
+        else:
+            workflow_parsing += "\n" + main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + "= Input(description=''),"
+
+    return workflow_parsing
 
 # 处理上传的 JSON 文件并将其保存到内存
 def upload_json(file):
@@ -141,6 +170,30 @@ def update_subsubmenu(outputs):
     return gr.update(choices=outputs, value=outputs[0] if outputs else None)
 
 
+# 定义函数，删除文本框中的最后一行
+def delete_last_line(text):
+    global workflow_parsing
+    global final_inputs
+    global input_dict
+    global input_type
+
+    
+    if text.strip():  # 检查文本框是否为空
+        workflow_lines = workflow_parsing.split("\n")
+        print(workflow_lines)
+        if workflow_lines[-1].split('_')[0]  in final_inputs:
+            final_inputs.remove(workflow_lines[-1].split('_')[0])
+            del input_dict[workflow_lines[-1].split('_')[0]]
+            #del input_type[workflow_lines[-1].split('_')[0]]
+        workflow_lines.pop()
+        
+        workflow_parsing = "\n".join(workflow_lines)
+        lines = text.split("\n")
+        lines.pop()  # 删除最后一行
+        return "\n".join(lines)
+    return text  # 如果文本框为空，保持原样
+
+
 # 定义 Gradio UI
 with gr.Blocks() as demo:
     options_list = ["int", "float", "str", "Path" ,"bool"]
@@ -150,9 +203,10 @@ with gr.Blocks() as demo:
         dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
     #with gr.Row():
         port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui")
-        logic_section = gr.Textbox(label="logic_section port",placeholder="port_comfyui")
 
 
+    
+    '''
     gr.Markdown("### Select an option from the list:")
 
     input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
@@ -172,11 +226,12 @@ with gr.Blocks() as demo:
             delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
             delete_button = gr.Button("Delete from List")
             delete_button.click(delete_selection, inputs=delete_input, outputs=output)
-
-
+        '''
+    gr.Markdown("### Upload a JSON File")
+    with gr.Row():
         ### workflow
             
-        gr.Markdown("### Upload a JSON File")
+        
     
         # 上传组件
         file_input = gr.File(label="Upload JSON File", file_types=[".json"])
@@ -190,8 +245,8 @@ with gr.Blocks() as demo:
 
         main_options = extract_keys(json_data)
 
-
-        gr.Markdown("### Dynamic Submenu Example")
+    with gr.Row():
+        gr.Markdown("### Choose your inputs")
     
         # 主选单
             # 主菜单（动态更新）
@@ -201,33 +256,38 @@ with gr.Blocks() as demo:
         sub_menu = gr.Dropdown(label="Sub Menu (Inputs)", choices=[], interactive=True)
             
 
-        sub_sub_menu = gr.Dropdown(label="Sub-Sub Menu (Last Selected List)", choices=[], interactive=True)
+        sub_sub_menu = gr.Dropdown(label="Sub-Sub Menu (Last Selected List)", choices=options_list, interactive=True)
 
-        # 输出区域
-        output_workflow = gr.Textbox(label="Result")
+        
         
         # 按钮
         submit_button = gr.Button("Submit")
         
-        # 当主选单改变时，动态更新次级选单
-        main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
 
-        # 次级菜单变化后显示结果
-        sub_menu.change(lambda x: f"You selected: {x}", inputs=sub_menu, outputs=output_workflow)
+    # 输出区域
+    output_workflow = gr.Textbox(label="Result")
 
+    # 当主选单改变时，动态更新次级选单
+    main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
 
-
-        # 提交按钮处理最终结果
-        submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu], outputs=output_workflow)
-
-        # 上传文件后更新主菜单
-        file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
-        file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
-        output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
+    # 提交按钮处理最终结果
+    submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu], outputs=output_workflow)
+    # 删除按钮
+    delete_button = gr.Button("Delete Last Line")
+    
+    # 按下按钮后删除最后一行
+    delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
 
 
-        ###
+
+    # 上传文件后更新主菜单
+    file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
+    file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+    #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
+
+
+
+    ###
 
 
 
@@ -249,7 +309,7 @@ with gr.Blocks() as demo:
     # 定义按钮点击行为
     generate_button.click(
         generate_predict_file,
-        inputs=[dir_comfyui, port_comfyui, output, logic_section],
+        inputs=[dir_comfyui, port_comfyui, output_workflow],
         outputs=final_output
     )
 demo.launch()

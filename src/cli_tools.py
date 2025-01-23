@@ -16,7 +16,7 @@ import signal
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
-IVRY_URL = "https://test.ivry.co/"
+IVRY_URL = "https://www.ivry.co/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 
