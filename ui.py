@@ -3,7 +3,7 @@ import subprocess
 import ast
 import json
 import copy
-import os
+import socket
 
 json_data = {}
 final_selection = []
@@ -20,8 +20,9 @@ input_dict = {}
 input_type = {}
 
 def generate_predict_file(dir_comfyui, port_comfyui, input_section):
-    print('input_dict',input_dict)
-    print('input_type',input_type)
+    if dir_comfyui == '':
+        raise ValueError("Please enter your comfyUI dir")
+ 
 
     cur_input_dict = copy.deepcopy(input_dict)
 
@@ -250,8 +251,6 @@ def delete_last_line(text):
         return "\n".join(lines)
     return text  # 如果文本框为空，保持原样
 
-def get_file_path(file):
-    return f"文件路径为: {file.name}"
 
 def run_login(api_key):
     try:
@@ -300,31 +299,50 @@ def run_upload(project_name):
             return f"上传失败！错误：\n{result.stderr}"
     except Exception as e:
         return f"执行命令出错：{str(e)}"
-    
 
+def get_local_ip():
+    """
+    尝试通过向公共 DNS (8.8.8.8) 建立一次 UDP 连接获取本机 IP。
+    由于 UDP 不需要实际发送数据，所以不会造成额外的网络负担。
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        # s.getsockname() 返回 (ip, port) 元组，这里的 ip 即本机的内网 IP
+        local_ip = s.getsockname()[0]
+    except Exception:
+        local_ip = "Unable to determine IP."
+    finally:
+        s.close()
+    return local_ip + ":8188"
+
+def win_path_to_wsl_path(win_path):
+    """
+    将 Windows 路径转换为 WSL 路径：
+    - 替换盘符，如 'C:\\' -> '/mnt/c/'
+    - 将所有反斜杠 '\' 替换为 '/'
+    """
+    # 统一将反斜杠替换为正斜杠
+    if not win_path:
+        raise ValueError("Input path is empty. Please provide a valid Windows path.")
+
+    path_unix = win_path.replace("\\", "/")
+
+    # 如果路径形如 "C:/..."（长度至少2，并且第2个字符是 ':')
+    # 那么把它转为 "/mnt/c/..."
+    if len(path_unix) >= 2 and path_unix[1] == ':':
+        drive_letter = path_unix[0].lower()  # 例如 'c'
+        path_unix = "/mnt/" + drive_letter + path_unix[2:]  # 去掉 "C:"，前面补 "/mnt/c"
+
+    return path_unix
 
 with gr.Blocks() as demo:
     with gr.Tabs():
-        with gr.Tab("upload and host app"):
-            gr.Markdown("## Step 5: upload your app, enter your project name")
-            # 输入组件
-            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="输入你的 Project 名字")
-            
-            # 输出组件
-            upload_output_text = gr.Textbox(label="上传结果")
-            
-            # 按钮触发
-            login_button = gr.Button("初始化")
-            login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
+        
 
         with gr.Tab("ivry init"):
             gr.Markdown("# Init Ivry")
-            gr.Markdown("## Step 1: Selcet your main.py to get your comfyUI dir, you will use it in Predict.py Generator")
-            file_input = gr.File(label="选择文件")
-            output = gr.Textbox(label="文件夹路径")
-            file_input.change(get_file_path, inputs=file_input, outputs=output)
-
-            gr.Markdown("## Step 2: Login to ivry! Creat your account and enter your apikey.")
+            gr.Markdown("## Step 1: Login to ivry! Creat your account and enter your apikey.")
             with gr.Accordion("点击展开查看嵌入网站", open=False): 
                 gr.HTML("""
                             <iframe 
@@ -347,7 +365,7 @@ with gr.Blocks() as demo:
             login_button = gr.Button("登录")
             login_button.click(run_login, inputs=api_key_input, outputs=output_text)
 
-            gr.Markdown("## Step 3: init your app! Please give it a good name!")
+            gr.Markdown("## Step 2: init your app! Please give it a good name!")
 
             # 输入组件
             project_name_input = gr.Textbox(label="Project Name", placeholder="输入你的 Project 名字")
@@ -359,7 +377,7 @@ with gr.Blocks() as demo:
             login_button = gr.Button("初始化")
             login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
 
-            gr.Markdown("## Step 4: Go to Predict.py Generator tab to generate your predict.py!")
+            gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
 
         with gr.Tab("Predict.py Generator"):
     
@@ -368,11 +386,14 @@ with gr.Blocks() as demo:
 
             gr.Markdown("## Cog predict.py Generator")
             with gr.Row():
-                dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
-            #with gr.Row():
-                port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="127.0.0.1:8188")
-
-
+                with gr.Column():
+                    dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
+                    dir_button = gr.Button("If you are windows user, please use this to convert your windows dir to wsl dir")
+                    dir_button.click(win_path_to_wsl_path, inputs=dir_comfyui, outputs=dir_comfyui)
+                with gr.Column():    
+                    port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="127.0.0.1:8188")
+                    port_button = gr.Button("If you are windows user, please use your ip instead of localhost")
+                    port_button.click(get_local_ip, outputs=port_comfyui)
             
             '''
             gr.Markdown("### Select an option from the list:")
@@ -485,4 +506,17 @@ with gr.Blocks() as demo:
                 inputs=[dir_comfyui, port_comfyui, output_workflow],
                 outputs=final_output
             )
+
+        with gr.Tab("upload and host app"):
+            gr.Markdown("## Step 4: upload your app, enter your project name")
+            # 输入组件
+            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="输入你的 Project 名字")
+            
+            # 输出组件
+            upload_output_text = gr.Textbox(label="上传结果")
+            
+            # 按钮触发
+            login_button = gr.Button("初始化")
+            login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
+
 demo.launch()
