@@ -170,6 +170,32 @@ def update_subsubmenu(outputs):
     return gr.update(choices=outputs, value=outputs[0] if outputs else None)
 
 
+# 定义清理逻辑
+def clear_cache():
+    global json_data
+    global final_selection
+    global inputs_counter
+    global workflow_parsing
+    global final_inputs
+    global input_dict
+    global input_type
+    
+    json_data = {}
+    final_selection = []
+    inputs_counter = {
+        "int":0, 
+        "float":0, 
+        "str":0, 
+        "Path":0 ,
+        "bool":0
+    }
+    workflow_parsing = ""
+    final_inputs = []
+    input_dict = {}
+    input_type = {}
+    return None  # 返回默认值以清空组件
+
+
 # 定义函数，删除文本框中的最后一行
 def delete_last_line(text):
     global workflow_parsing
@@ -282,9 +308,13 @@ with gr.Blocks() as demo:
 
     # 上传文件后更新主菜单
     file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
-    file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+    #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+    file_input.change(clear_cache, inputs=[], outputs=output_workflow)
     #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
 
+    
+    
+    
 
 
     ###
