@@ -301,20 +301,15 @@ def run_upload(project_name):
         return f"执行命令出错：{str(e)}"
 
 def get_local_ip():
-    """
-    尝试通过向公共 DNS (8.8.8.8) 建立一次 UDP 连接获取本机 IP。
-    由于 UDP 不需要实际发送数据，所以不会造成额外的网络负担。
-    """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # 执行 shell 命令
     try:
-        s.connect(("8.8.8.8", 80))
-        # s.getsockname() 返回 (ip, port) 元组，这里的 ip 即本机的内网 IP
-        local_ip = s.getsockname()[0]
-    except Exception:
-        local_ip = "Unable to determine IP."
-    finally:
-        s.close()
-    return local_ip + ":8188"
+        result = subprocess.check_output(
+            "ip route | grep default | awk '{print $3}'", shell=True, text=True
+        ).strip()
+        return result + ":8188"
+    except subprocess.CalledProcessError as e:
+        return f"Error: {e}"
+
 
 def win_path_to_wsl_path(win_path):
     """
@@ -392,7 +387,7 @@ with gr.Blocks() as demo:
                     dir_button.click(win_path_to_wsl_path, inputs=dir_comfyui, outputs=dir_comfyui)
                 with gr.Column():    
                     port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="127.0.0.1:8188")
-                    port_button = gr.Button("If you are windows user, please use your ip instead of localhost")
+                    port_button = gr.Button("If you are windows user, please run webui in wsl and click this for ip")
                     port_button.click(get_local_ip, outputs=port_comfyui)
             
             '''
@@ -521,7 +516,7 @@ with gr.Blocks() as demo:
 
             gr.Markdown("## wsl notes")
             instructions = """
-                # How to Install WSL and Ubuntu 20.04
+                # How to Install WSL and Ubuntu 22.04
 
                 ## Step 1: Enable WSL and Virtualization Features
                 1. Open **PowerShell** as Administrator.
@@ -541,7 +536,7 @@ with gr.Blocks() as demo:
                 2. **Using PowerShell**:
                 - Run the following command:
                     ```
-                    wsl --install -d Ubuntu-20.04
+                    wsl --install -d Ubuntu-22.04
                     ```
 
                 ## Step 3: Set Up Ubuntu
