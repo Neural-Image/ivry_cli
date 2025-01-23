@@ -1,7 +1,9 @@
 import gradio as gr
-
+import subprocess
 import ast
 import json
+import copy
+import os
 
 json_data = {}
 final_selection = []
@@ -18,6 +20,14 @@ input_dict = {}
 input_type = {}
 
 def generate_predict_file(dir_comfyui, port_comfyui, input_section):
+    print('input_dict',input_dict)
+    print('input_type',input_type)
+
+    cur_input_dict = copy.deepcopy(input_dict)
+
+
+    if not dir_comfyui:
+        return "Error: Please enter your comfyUI dir!"
     # 读取模板文件内容
     input_parameter = ""
     with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
@@ -29,27 +39,30 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
             input_section[index] = i.replace("\n", "")
         if i == '':
             input_section.pop(index)
-    print(input_section)
+
     # ### Inputs 
 
-    print("input_dict",input_dict)
+
     for i in input_section:
         #input_dict[]
         input_parameter = input_parameter + 'ivry_' + i + ",\n                "  
-    print(input_parameter)
-    
+
     
     ###
 
     ### workflow json
 
     logic_section = ""
-    for i in input_dict.keys():
-        if input_type[i] == 'Path':
-            logic_section += f"prompt_config['{i}']['inputs']['{input_dict[i]}'] = str(ivry_{i}_{input_dict[i]})" +  "\n        "
+    for index, i in enumerate(input_section):
+        tmp_node_id = i.split('_')[0]
+        tmp_node_input = cur_input_dict[tmp_node_id][-1]
+        if tmp_node_input == 'Path':
+            logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
         else:
-            logic_section += f"prompt_config['{i}']['inputs']['{input_dict[i]}'] = ivry_{i}_{input_dict[i]}" +  "\n        "
+            logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
 
+        if len(cur_input_dict[tmp_node_id]) > 1:
+            cur_input_dict[tmp_node_id].pop()
 
 
 
@@ -67,8 +80,8 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     
     
     # 替换模板中的占位符
-    content = content.replace("{{dir_comfyui}}", dir_comfyui)
-    content = content.replace("{{port_comfyui}}", port_comfyui)
+    content = content.replace("{{dir_comfyui}}", f"{dir_comfyui}")
+    content = content.replace("{{port_comfyui}}", f"{port_comfyui}")
     content = content.replace("{{input_section}}", input_parameter)
     content = content.replace("{{logic_section}}", logic_section)
 
@@ -103,9 +116,18 @@ def process_selection(main_selection, sub_selection, sub_sub_selection):
     global final_inputs
     global input_dict
     global input_type
-    if (main_selection.split(' ')[0]) not in final_inputs:
-        input_dict[main_selection.split(' ')[0]] = sub_selection
-        input_type[main_selection.split(' ')[0]] = sub_sub_selection
+    if (main_selection.split(' ')[0] + sub_selection) not in final_inputs:
+        if main_selection.split(' ')[0] not in input_dict:
+            input_dict[main_selection.split(' ')[0]] = [sub_selection]
+        else:
+            input_dict[main_selection.split(' ')[0]].append(sub_selection)
+        
+        if main_selection.split(' ')[0] not in input_type:
+            input_type[main_selection.split(' ')[0]] = [sub_sub_selection]
+        else:
+            input_type[main_selection.split(' ')[0]].append(sub_sub_selection)
+        
+        
         final_inputs.append(main_selection.split(' ')[0] + sub_selection)
         if len(final_inputs) == 1:
             workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + "= Input(description=''),"
@@ -206,11 +228,20 @@ def delete_last_line(text):
     
     if text.strip():  # 检查文本框是否为空
         workflow_lines = workflow_parsing.split("\n")
-        print(workflow_lines)
-        if workflow_lines[-1].split('_')[0]  in final_inputs:
-            final_inputs.remove(workflow_lines[-1].split('_')[0])
-            del input_dict[workflow_lines[-1].split('_')[0]]
-            #del input_type[workflow_lines[-1].split('_')[0]]
+        if workflow_lines[-1].split('_')[0] + input_dict[workflow_lines[-1].split('_')[0]][-1] in final_inputs:
+            final_inputs.remove(workflow_lines[-1].split('_')[0]+ input_dict[workflow_lines[-1].split('_')[0]][-1])
+
+            if len(input_dict[workflow_lines[-1].split('_')[0]]) < 2:
+                del input_dict[workflow_lines[-1].split('_')[0]]
+            else:
+                input_dict[workflow_lines[-1].split('_')[0]].pop()
+            
+            if len(input_type[workflow_lines[-1].split('_')[0]]) < 2:
+                del input_type[workflow_lines[-1].split('_')[0]]
+            else:
+                input_type[workflow_lines[-1].split('_')[0]].pop()
+        print('input_dict',input_dict)
+        print('input_type',input_type)
         workflow_lines.pop()
         
         workflow_parsing = "\n".join(workflow_lines)
@@ -219,105 +250,363 @@ def delete_last_line(text):
         return "\n".join(lines)
     return text  # 如果文本框为空，保持原样
 
+def get_file_path(file):
+    return f"文件路径为: {file.name}"
 
-# 定义 Gradio UI
+def run_login(api_key):
+    try:
+        # 构造命令
+        command = f"project-x login {api_key}"
+        
+        # 运行命令
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        
+        # 根据执行结果返回
+        if result.returncode == 0:
+            return f"成功登录！输出：\n{result.stdout}"
+        else:
+            return f"登录失败！错误：\n{result.stderr}"
+    except Exception as e:
+        return f"执行命令出错：{str(e)}"
+    
+def run_init(project_name):
+    try:
+        # 构造命令
+        command = f"project-x init_app --project_name {project_name} --mode comfyui"
+        
+        # 运行命令
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        
+        # 根据执行结果返回
+        if result.returncode == 0:
+            return f"成功初始化！输出：\n{result.stdout}"
+        else:
+            return f"初始化失败！错误：\n{result.stderr}"
+    except Exception as e:
+        return f"执行命令出错：{str(e)}"
+
+def run_upload(project_name):
+    try:
+        # 构造命令
+        command = f"project-x upload_app --model_name {project_name}"
+        
+        # 运行命令
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        
+        # 根据执行结果返回
+        if result.returncode == 0:
+            return f"成功上传！输出：\n{result.stdout}"
+        else:
+            return f"上传失败！错误：\n{result.stderr}"
+    except Exception as e:
+        return f"执行命令出错：{str(e)}"
+    
+def get_process_by_port(port):
+    """
+    获取占用指定端口的进程 PID
+    """
+    try:
+        # 使用 netstat 命令查找端口
+        command = f"netstat -ano | findstr :{port}"
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        
+        # 如果命令没有返回结果
+        if result.returncode != 0 or not result.stdout.strip():
+            return None, f"端口 {port} 未被占用。"
+        
+        # 解析命令输出，提取 PID
+        lines = result.stdout.strip().split("\n")
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 5 and parts[1].endswith(f":{port}"):
+                pid = parts[-1]
+                return pid, None
+        return None, f"未能正确解析端口 {port} 的进程信息。"
+    except Exception as e:
+        return None, f"获取进程信息时出错：{str(e)}"
+
+def kill_process(pid):
+    """
+    终止指定 PID 的进程
+    """
+    try:
+        command = f"taskkill /PID {pid} /F"
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        if result.returncode == 0:
+            return f"成功终止进程 PID: {pid}"
+        else:
+            return f"终止进程失败，错误信息：{result.stderr.strip()}"
+    except Exception as e:
+        return f"终止进程时出错：{str(e)}"
+
+def stop_cloudflare_service():
+    """
+    停止 Cloudflare 的服务
+    """
+    try:
+        # 停止 Cloudflare 的 Windows 服务
+        command = "sc stop CloudflareTunnel"
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        if result.returncode == 0:
+            return "成功停止 Cloudflare 服务。"
+        else:
+            return f"停止 Cloudflare 服务失败，错误信息：{result.stderr.strip()}"
+    except Exception as e:
+        return f"停止 Cloudflare 服务时出错：{str(e)}"
+    
+def download_cloudflared():
+    """
+    下载 cloudflared 可执行文件
+    """
+    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    output_file = "cloudflared.exe"
+
+    print("正在下载 cloudflared...")
+    try:
+        # 使用 PowerShell 命令下载文件
+        command = f"powershell Invoke-WebRequest -Uri {url} -OutFile {output_file}"
+        result = subprocess.run(command, shell=True, text=True, capture_output=True)
+        if result.returncode == 0:
+            print("cloudflared 下载成功。")
+        else:
+            print(f"下载失败：{result.stderr}")
+            return False
+    except Exception as e:
+        print(f"下载过程中出错：{e}")
+        return False
+    
+    return output_file
+
+def move_to_global_path():
+    """
+    将 cloudflared 移动到全局路径并添加到环境变量
+    """
+    file_path = "cloudflared.exe"
+    try:
+        target_dir = "C:\\Program Files\\cloudflared"
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+
+        target_path = os.path.join(target_dir, "cloudflared.exe")
+        if os.path.exists(file_path):
+            os.rename(file_path, target_path)
+
+        try:
+            command = f"[System.Environment]::SetEnvironmentVariable('Path', $Env:Path + ';{target_path}', [System.EnvironmentVariableTarget]::Machine)"
+            result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("全局环境变量更新成功。")
+            else:
+                print(f"更新失败，错误信息：{result.stderr}")
+        except Exception as e:
+            print(f"更新环境变量时出错：{e}")
+        return True
+    except Exception as e:
+        print(f"移动文件或更新环境变量时出错：{e}")
+        return False
+
+def verify_installation():
+    """
+    验证 cloudflared 是否安装成功
+    """
+    try:
+        result = subprocess.run(
+            r'"C:\Program Files\cloudflared\cloudflared.exe" --version',  # 注意路径和引号
+            shell=True, 
+            text=True, 
+            capture_output=True
+        )
+
+        print(result.stdout)  # 输出命令的标准输出
+        print(result.stderr)  # 输出命令的错误信息（如果有）
+        return True
+    except Exception as e:
+        print(f"验证过程中出错：{e}")
+        return False
+
+
 with gr.Blocks() as demo:
-    options_list = ["int", "float", "str", "Path" ,"bool"]
-
-    gr.Markdown("## Cog predict.py Generator")
-    with gr.Row():
-        dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
-    #with gr.Row():
-        port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui")
-
-
-    
-    '''
-    gr.Markdown("### Select an option from the list:")
-
-    input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
-    with gr.Row():
-    # 创建一个Radio组件
-        
-        with gr.Column():
-        # 创建一个显示最终选择列表的输出区域
-            output = gr.Textbox(label="Selected List", lines=5)
+    with gr.Tabs():
+        with gr.Tab("upload and host app"):
+            gr.Markdown("## Step 5: upload your app, enter your project name")
+            # 输入组件
+            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="输入你的 Project 名字")
             
-            # 添加按钮和交互逻辑
-            button = gr.Button("Add to List")
-            button.click(update_selection, inputs=input_section, outputs=output)
-
-        with gr.Column():
-            gr.Markdown("### Delete an option:")
-            delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
-            delete_button = gr.Button("Delete from List")
-            delete_button.click(delete_selection, inputs=delete_input, outputs=output)
-        '''
-    gr.Markdown("### Upload a JSON File")
-    with gr.Row():
-        ### workflow
+            # 输出组件
+            upload_output_text = gr.Textbox(label="上传结果")
             
-        
-    
-        # 上传组件
-        file_input = gr.File(label="Upload JSON File", file_types=[".json"])
-        
-        # 输出组件
-        json_output = gr.JSON(label="File Content (Loaded in Memory)")
-        
-        # 绑定上传文件和显示内容的逻辑
-        file_input.change(upload_json, inputs=file_input, outputs=json_output)
-        
+            # 按钮触发
+            login_button = gr.Button("初始化")
+            login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
 
-        main_options = extract_keys(json_data)
+            gr.Markdown("## Step 6: install cloudflared")
+            # 输出组件
+            download_output_text = gr.Textbox(label="download 结果")
+            
+            # 按钮触发
+            download_button = gr.Button("download cloudflared")
+            download_button.click(download_cloudflared, outputs=download_output_text)
 
-    with gr.Row():
-        gr.Markdown("### Choose your inputs")
+            # 输出组件
+            addpath_output_text = gr.Textbox(label="addpath 结果")
+            
+            # 按钮触发
+            addpath_button = gr.Button("addpath cloudflared")
+            addpath_button.click(move_to_global_path, outputs=addpath_output_text)
+
+            # 输出组件
+            verify_output_text = gr.Textbox(label="verify 结果")
+            
+            # 按钮触发
+            verify_button = gr.Button("verify cloudflared")
+            verify_button.click(verify_installation, outputs=verify_output_text)
+
+
+        with gr.Tab("ivry init"):
+            gr.Markdown("# Init Ivry")
+            gr.Markdown("## Step 1: Selcet your main.py to get your comfyUI dir, you will use it in Predict.py Generator")
+            file_input = gr.File(label="选择文件")
+            output = gr.Textbox(label="文件夹路径")
+            file_input.change(get_file_path, inputs=file_input, outputs=output)
+
+            gr.Markdown("## Step 2: Login to ivry! Creat your account and enter your apikey.")
+            with gr.Accordion("点击展开查看嵌入网站", open=False): 
+                gr.HTML("""
+                            <iframe 
+                                src="https://www.ivry.co/account" 
+                                width="100%" 
+                                height="500" 
+                                frameborder="0">
+                            </iframe>
+                        """)
+
+            gr.Markdown("### 输入 API Key 来登录 Project-X")
     
-        # 主选单
-            # 主菜单（动态更新）
-        main_menu = gr.Dropdown(label="Main Menu", choices=[], interactive=True)
+            # 输入组件
+            api_key_input = gr.Textbox(label="API Key", placeholder="输入你的 API Key", type="password")
+            
+            # 输出组件
+            output_text = gr.Textbox(label="登录结果")
+            
+            # 按钮触发
+            login_button = gr.Button("登录")
+            login_button.click(run_login, inputs=api_key_input, outputs=output_text)
+
+            gr.Markdown("## Step 3: init your app! Please give it a good name!")
+
+            # 输入组件
+            project_name_input = gr.Textbox(label="Project Name", placeholder="输入你的 Project 名字")
+            
+            # 输出组件
+            init_output_text = gr.Textbox(label="初始化结果")
+            
+            # 按钮触发
+            login_button = gr.Button("初始化")
+            login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
+
+            gr.Markdown("## Step 4: Go to Predict.py Generator tab to generate your predict.py!")
+
+        with gr.Tab("Predict.py Generator"):
+    
         
-        # 次级菜单（动态更新）
-        sub_menu = gr.Dropdown(label="Sub Menu (Inputs)", choices=[], interactive=True)
+            options_list = ["int", "float", "str", "Path" ,"bool"]
+
+            gr.Markdown("## Cog predict.py Generator")
+            with gr.Row():
+                dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
+            #with gr.Row():
+                port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="127.0.0.1:8188")
+
+
+            
+            '''
+            gr.Markdown("### Select an option from the list:")
+
+            input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
+            with gr.Row():
+            # 创建一个Radio组件
+                
+                with gr.Column():
+                # 创建一个显示最终选择列表的输出区域
+                    output = gr.Textbox(label="Selected List", lines=5)
+                    
+                    # 添加按钮和交互逻辑
+                    button = gr.Button("Add to List")
+                    button.click(update_selection, inputs=input_section, outputs=output)
+
+                with gr.Column():
+                    gr.Markdown("### Delete an option:")
+                    delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
+                    delete_button = gr.Button("Delete from List")
+                    delete_button.click(delete_selection, inputs=delete_input, outputs=output)
+                '''
+            gr.Markdown("### Upload a JSON File")
+            with gr.Row():
+                ### workflow
+                    
+                
+            
+                # 上传组件
+                file_input = gr.File(label="Upload JSON File", file_types=[".json"])
+                
+                # 输出组件
+                json_output = gr.JSON(label="File Content (Loaded in Memory)")
+                
+                # 绑定上传文件和显示内容的逻辑
+                file_input.change(upload_json, inputs=file_input, outputs=json_output)
+                
+
+                main_options = extract_keys(json_data)
+
+            gr.Markdown("### Choose your inputs")
+            with gr.Row():
+                
+            
+                # 主选单
+                    # 主菜单（动态更新）
+                main_menu = gr.Dropdown(label="Main Menu", choices=[], interactive=True)
+                
+                # 次级菜单（动态更新）
+                sub_menu = gr.Dropdown(label="Sub Menu (Inputs)", choices=[], interactive=True)
+                    
+
+                sub_sub_menu = gr.Dropdown(label="Sub-Sub Menu (Last Selected List)", choices=options_list, interactive=True)
+
+                
+                
+            # 按钮
+            submit_button = gr.Button("Submit")
+                
+
+            # 输出区域
+            output_workflow = gr.Textbox(label="Result")
+
+            # 当主选单改变时，动态更新次级选单
+            main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
+
+            # 提交按钮处理最终结果
+            submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu], outputs=output_workflow)
+            # 删除按钮
+            delete_button = gr.Button("Delete Last Line")
+            
+            # 按下按钮后删除最后一行
+            delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
+
+
+
+            # 上传文件后更新主菜单
+            file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
+            #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+            file_input.change(clear_cache, inputs=[], outputs=output_workflow)
+            #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
+
+            
+            
             
 
-        sub_sub_menu = gr.Dropdown(label="Sub-Sub Menu (Last Selected List)", choices=options_list, interactive=True)
 
-        
-        
-        # 按钮
-        submit_button = gr.Button("Submit")
-        
-
-    # 输出区域
-    output_workflow = gr.Textbox(label="Result")
-
-    # 当主选单改变时，动态更新次级选单
-    main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
-
-    # 提交按钮处理最终结果
-    submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu], outputs=output_workflow)
-    # 删除按钮
-    delete_button = gr.Button("Delete Last Line")
-    
-    # 按下按钮后删除最后一行
-    delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
-
-
-
-    # 上传文件后更新主菜单
-    file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
-    #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
-    file_input.change(clear_cache, inputs=[], outputs=output_workflow)
-    #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
-    
-    
-    
-
-
-    ###
+            ###
 
 
 
@@ -334,12 +623,12 @@ with gr.Blocks() as demo:
 
 
 
-    final_output = gr.Textbox(label="Output", interactive=False)
-    generate_button = gr.Button("Generate predict.py")
-    # 定义按钮点击行为
-    generate_button.click(
-        generate_predict_file,
-        inputs=[dir_comfyui, port_comfyui, output_workflow],
-        outputs=final_output
-    )
+            final_output = gr.Textbox(label="Output", interactive=False)
+            generate_button = gr.Button("Generate predict.py")
+            # 定义按钮点击行为
+            generate_button.click(
+                generate_predict_file,
+                inputs=[dir_comfyui, port_comfyui, output_workflow],
+                outputs=final_output
+            )
 demo.launch()

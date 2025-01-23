@@ -37,3 +37,4 @@ tunnel_credential*.json
 /ivry_test
 /ivry
 gradio_predict.py
+/windows
