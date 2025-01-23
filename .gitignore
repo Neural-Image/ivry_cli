@@ -38,3 +38,4 @@ tunnel_credential*.json
 /ivry
 gradio_predict.py
 /windows
+/myenv

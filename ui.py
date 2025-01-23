@@ -80,8 +80,8 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     
     
     # 替换模板中的占位符
-    content = content.replace("{{dir_comfyui}}", f"{dir_comfyui}")
-    content = content.replace("{{port_comfyui}}", f"{port_comfyui}")
+    content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
+    content = content.replace("{{port_comfyui}}", f"'{port_comfyui}'")
     content = content.replace("{{input_section}}", input_parameter)
     content = content.replace("{{logic_section}}", logic_section)
 
@@ -301,129 +301,6 @@ def run_upload(project_name):
     except Exception as e:
         return f"执行命令出错：{str(e)}"
     
-def get_process_by_port(port):
-    """
-    获取占用指定端口的进程 PID
-    """
-    try:
-        # 使用 netstat 命令查找端口
-        command = f"netstat -ano | findstr :{port}"
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        
-        # 如果命令没有返回结果
-        if result.returncode != 0 or not result.stdout.strip():
-            return None, f"端口 {port} 未被占用。"
-        
-        # 解析命令输出，提取 PID
-        lines = result.stdout.strip().split("\n")
-        for line in lines:
-            parts = line.split()
-            if len(parts) >= 5 and parts[1].endswith(f":{port}"):
-                pid = parts[-1]
-                return pid, None
-        return None, f"未能正确解析端口 {port} 的进程信息。"
-    except Exception as e:
-        return None, f"获取进程信息时出错：{str(e)}"
-
-def kill_process(pid):
-    """
-    终止指定 PID 的进程
-    """
-    try:
-        command = f"taskkill /PID {pid} /F"
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        if result.returncode == 0:
-            return f"成功终止进程 PID: {pid}"
-        else:
-            return f"终止进程失败，错误信息：{result.stderr.strip()}"
-    except Exception as e:
-        return f"终止进程时出错：{str(e)}"
-
-def stop_cloudflare_service():
-    """
-    停止 Cloudflare 的服务
-    """
-    try:
-        # 停止 Cloudflare 的 Windows 服务
-        command = "sc stop CloudflareTunnel"
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        if result.returncode == 0:
-            return "成功停止 Cloudflare 服务。"
-        else:
-            return f"停止 Cloudflare 服务失败，错误信息：{result.stderr.strip()}"
-    except Exception as e:
-        return f"停止 Cloudflare 服务时出错：{str(e)}"
-    
-def download_cloudflared():
-    """
-    下载 cloudflared 可执行文件
-    """
-    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-    output_file = "cloudflared.exe"
-
-    print("正在下载 cloudflared...")
-    try:
-        # 使用 PowerShell 命令下载文件
-        command = f"powershell Invoke-WebRequest -Uri {url} -OutFile {output_file}"
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        if result.returncode == 0:
-            print("cloudflared 下载成功。")
-        else:
-            print(f"下载失败：{result.stderr}")
-            return False
-    except Exception as e:
-        print(f"下载过程中出错：{e}")
-        return False
-    
-    return output_file
-
-def move_to_global_path():
-    """
-    将 cloudflared 移动到全局路径并添加到环境变量
-    """
-    file_path = "cloudflared.exe"
-    try:
-        target_dir = "C:\\Program Files\\cloudflared"
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
-
-        target_path = os.path.join(target_dir, "cloudflared.exe")
-        if os.path.exists(file_path):
-            os.rename(file_path, target_path)
-
-        try:
-            command = f"[System.Environment]::SetEnvironmentVariable('Path', $Env:Path + ';{target_path}', [System.EnvironmentVariableTarget]::Machine)"
-            result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True)
-
-            if result.returncode == 0:
-                print("全局环境变量更新成功。")
-            else:
-                print(f"更新失败，错误信息：{result.stderr}")
-        except Exception as e:
-            print(f"更新环境变量时出错：{e}")
-        return True
-    except Exception as e:
-        print(f"移动文件或更新环境变量时出错：{e}")
-        return False
-
-def verify_installation():
-    """
-    验证 cloudflared 是否安装成功
-    """
-    try:
-        result = subprocess.run(
-            r'"C:\Program Files\cloudflared\cloudflared.exe" --version',  # 注意路径和引号
-            shell=True, 
-            text=True, 
-            capture_output=True
-        )
-
-        print(result.stdout)  # 输出命令的标准输出
-        print(result.stderr)  # 输出命令的错误信息（如果有）
-        return True
-    except Exception as e:
-        print(f"验证过程中出错：{e}")
-        return False
 
 
 with gr.Blocks() as demo:
@@ -439,29 +316,6 @@ with gr.Blocks() as demo:
             # 按钮触发
             login_button = gr.Button("初始化")
             login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
-
-            gr.Markdown("## Step 6: install cloudflared")
-            # 输出组件
-            download_output_text = gr.Textbox(label="download 结果")
-            
-            # 按钮触发
-            download_button = gr.Button("download cloudflared")
-            download_button.click(download_cloudflared, outputs=download_output_text)
-
-            # 输出组件
-            addpath_output_text = gr.Textbox(label="addpath 结果")
-            
-            # 按钮触发
-            addpath_button = gr.Button("addpath cloudflared")
-            addpath_button.click(move_to_global_path, outputs=addpath_output_text)
-
-            # 输出组件
-            verify_output_text = gr.Textbox(label="verify 结果")
-            
-            # 按钮触发
-            verify_button = gr.Button("verify cloudflared")
-            verify_button.click(verify_installation, outputs=verify_output_text)
-
 
         with gr.Tab("ivry init"):
             gr.Markdown("# Init Ivry")

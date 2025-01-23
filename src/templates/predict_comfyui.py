@@ -76,7 +76,7 @@ class Predictor(BasePredictor):
         ws = websocket.WebSocket()
         ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
         # If your output is image with comfy Core node:
-        images = get_images(ws, client_id, prompt_config)
+        images = get_images(ws, client_id, prompt_config, server_address)
         ws.close()
         print('inference done')
         img_path_list = []

@@ -7,29 +7,28 @@ import urllib.parse
 import logging
 import time
 
-server_address = "127.0.0.1:8188"
 LOG_FILE = "client.log"
 MIN_INTERVAL = 1  # 最小间隔时间
 
 
-def queue_prompt(prompt, client_id):
+def queue_prompt(prompt, client_id, server_address):
     p = {"prompt": prompt, "client_id": client_id}
     data = json.dumps(p).encode('utf-8')
     req =  urllib.request.Request("http://{}/prompt".format(server_address), data=data)
     return json.loads(urllib.request.urlopen(req).read())
 
-def get_image(filename, subfolder, folder_type):
+def get_image(filename, subfolder, folder_type, server_address):
     data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
     url_values = urllib.parse.urlencode(data)
     with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
         return response.read()
 
-def get_history(prompt_id):
+def get_history(prompt_id, server_address):
     with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
         return json.loads(response.read())
 
-def get_images(ws, client_id, prompt):
-    prompt_id = queue_prompt(prompt, client_id)['prompt_id']
+def get_images(ws, client_id, prompt, server_address):
+    prompt_id = queue_prompt(prompt, client_id, server_address)['prompt_id']
     output_images = {}
     logging.basicConfig(
         level=logging.INFO,  # 设置日志级别为 INFO
@@ -59,7 +58,7 @@ def get_images(ws, client_id, prompt):
             # preview_image = Image.open(bytesIO) # This is your preview in PIL image format, store it in a global
             continue #previews are binary data
 
-    history = get_history(prompt_id)[prompt_id]
+    history = get_history(prompt_id, server_address)[prompt_id]
     #NOTE original code 
     # for node_id in history['outputs']:
     #     node_output = history['outputs'][node_id]
