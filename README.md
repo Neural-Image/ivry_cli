@@ -1,4 +1,5 @@
 ## 🔥 Updates
+- **`2025/01/23`**: webui beta
 - **`2025/01/20`**: log trunction (holding latest 5mb logs)
 - **`2025/01/20`**: logging interval (default logging interval - 1 sec)
 - **`2025/01/20`**: Organizing more hyperparameters (website url)
