@@ -375,7 +375,8 @@ with gr.Blocks() as demo:
             gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
 
         with gr.Tab("Predict.py Generator"):
-    
+            # TODO 
+            # Add json file dir
         
             options_list = ["int", "float", "str", "Path" ,"bool"]
 
