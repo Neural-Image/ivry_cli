@@ -39,3 +39,4 @@ tunnel_credential*.json
 gradio_predict.py
 /windows
 /myenv
+/comfyui_workflows

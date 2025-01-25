@@ -3,9 +3,13 @@ import subprocess
 import ast
 import json
 import copy
-import socket
+import os
+from pathlib import Path
+import signal
+
 
 json_data = {}
+json_name = ""
 final_selection = []
 inputs_counter = {
     "int":0, 
@@ -18,14 +22,22 @@ workflow_parsing = ""
 final_inputs = []
 input_dict = {}
 input_type = {}
+workflow_json = ""
+project_x_process = None
+cloudflare_process = None
+
+
 
 def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     if dir_comfyui == '':
         raise ValueError("Please enter your comfyUI dir")
  
+    os.makedirs("comfyui_workflows", exist_ok=True)
+    with open("comfyui_workflows/" + json_name, "w") as output_file:
+        json.dump(json_data, output_file, indent=4)
 
     cur_input_dict = copy.deepcopy(input_dict)
-
+    cur_input_type = copy.deepcopy(input_type)
 
     if not dir_comfyui:
         return "Error: Please enter your comfyUI dir!"
@@ -56,14 +68,18 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     logic_section = ""
     for index, i in enumerate(input_section):
         tmp_node_id = i.split('_')[0]
+        tmp_node_typr = cur_input_type[tmp_node_id][-1]
         tmp_node_input = cur_input_dict[tmp_node_id][-1]
-        if tmp_node_input == 'Path':
+        print('tmp_node_id', tmp_node_id)
+        print('tmp_node_input', tmp_node_input)
+        if tmp_node_typr == 'Path':
             logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
         else:
             logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
 
         if len(cur_input_dict[tmp_node_id]) > 1:
             cur_input_dict[tmp_node_id].pop()
+            cur_input_type[tmp_node_id].pop()
 
 
 
@@ -78,12 +94,14 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
     
     
     
-    
+    folder = Path("comfyui_workflows/" + json_name)  # 文件夹的相对路径
+    absolute_path = folder.resolve()  # 获取绝对路径
     
     # 替换模板中的占位符
     content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
     content = content.replace("{{port_comfyui}}", f"'{port_comfyui}'")
     content = content.replace("{{input_section}}", input_parameter)
+    content = content.replace("{{workflow_dir}}", f"'{absolute_path}'")
     content = content.replace("{{logic_section}}", logic_section)
 
 
@@ -91,7 +109,7 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
 
 
     # 保存为 predict.py
-    with open("gradio_predict.py", "w") as predict_file:
+    with open("predict.py", "w") as predict_file:
         predict_file.write(content)
 
     return "predict.py generated successfully!"
@@ -164,9 +182,12 @@ def extract_keys(data):
 # 上传 JSON 文件并更新主菜单
 def upload_json_and_update_menu(file):
     global json_data
+    global json_name
     if file is not None:
         with open(file.name, "r") as f:
             json_data = json.load(f)
+        json_name = os.path.basename(file.name) 
+
         keys = extract_keys(json_data)  # 提取所有键
         unique_keys = list(set(keys))  # 去重
         return gr.update(choices=unique_keys, value=unique_keys[0])  # 更新 Dropdown 的选项
@@ -285,6 +306,23 @@ def run_init(project_name):
         return f"执行命令出错：{str(e)}"
 
 def run_upload(project_name):
+    if project_name == '':
+        raise ValueError("Please enter your project name")
+
+
+    import shutil
+    source_file = Path("predict.py")
+    destination_folder = Path(project_name)
+    destination_file = destination_folder / source_file.name
+
+    if not destination_folder.exists():
+        raise ValueError("Please init your project first")
+
+    if not source_file.exists():
+        print("predict.py does not exist.")
+    else:
+        shutil.copy(source_file, destination_file)
+
     try:
         # 构造命令
         command = f"project-x upload_app --model_name {project_name}"
@@ -299,6 +337,9 @@ def run_upload(project_name):
             return f"上传失败！错误：\n{result.stderr}"
     except Exception as e:
         return f"执行命令出错：{str(e)}"
+    
+
+
 
 def get_local_ip():
     # 执行 shell 命令
@@ -330,6 +371,103 @@ def win_path_to_wsl_path(win_path):
         path_unix = "/mnt/" + drive_letter + path_unix[2:]  # 去掉 "C:"，前面补 "/mnt/c"
 
     return path_unix
+
+def start_project_x(target_path):
+
+    if target_path == '':
+        raise ValueError("Please enter your project name")
+
+    """运行 project-x 子进程，并写入日志文件。"""
+    global project_x_process
+    target_dir = Path(target_path)
+    if not target_dir.exists():
+        return f"Error: Target path '{target_path}' does not exist."
+
+    with open(target_dir / "client.log", "w") as log_file:
+        subprocess.Popen(
+            [
+                "project-x", "start", "model",
+                "--upload-url=https://www.ivry.co/pc/client-api/upload"
+            ],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=target_dir  # 设置工作目录
+        )
+    return f"Project-X started in {target_path}. Logs are being written to client.log."
+
+def start_cloudflare(target_path):
+
+    if target_path == '':
+        raise ValueError("Please enter your project name")
+    
+
+    """运行 cloudflared 子进程，并写入日志文件。"""
+    global cloudflare_process
+    target_dir = Path(target_path)
+    if not target_dir.exists():
+        return f"Error: Target path '{target_path}' does not exist."
+
+    with open(target_dir / "cloudflare.log", "w") as log_file:
+        subprocess.Popen(
+            ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=target_dir  # 设置工作目录
+        )
+    return f"Cloudflare started in {target_path}. Logs are being written to cloudflare.log."
+
+def sync_data(data):
+    return data
+
+
+def stop_processes():
+
+    def kill_process_by_port(port):
+        try:
+            # 使用 lsof 找到使用指定端口的进程
+            result = subprocess.run(
+                ["lsof", "-t", f"-i:{port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            pids = result.stdout.strip().split("\n")
+
+            if not pids or result.returncode != 0:
+                return f"No process found on port {port}."
+
+            # 杀死所有找到的进程
+            for pid in pids:
+                os.kill(int(pid), signal.SIGTERM)
+
+            return f"Terminated processes on port {port}: {', '.join(pids)}"
+        except Exception as e:
+            return f"Error terminating processes on port {port}: {e}"
+    
+    def terminate_process(name):
+        try:
+            # List all processes and find those matching the name
+            result = subprocess.run(["pgrep", "-f", name], stdout=subprocess.PIPE, text=True)
+            pids = result.stdout.strip().split("\n")
+            if pids:
+                for pid in pids:
+                    os.kill(int(pid), signal.SIGTERM)
+                print(f"Terminated {name} processes with PIDs: {', '.join(pids)}")
+            else:
+                print(f"No processes found for {name}")
+        except Exception as e:
+            print(f"Error stopping {name}: {e}")
+
+    # Terminate `project-x` process
+    terminate_process("project-x")
+
+    # Terminate `cloudflared` process
+    terminate_process("cloudflared tunnel --config tunnel_config.json run")
+    
+    kill_process_by_port(3009)
+
+    return "All server processes have been stopped."
+
 
 with gr.Blocks() as demo:
     with gr.Tabs():
@@ -512,38 +650,67 @@ with gr.Blocks() as demo:
             upload_output_text = gr.Textbox(label="上传结果")
             
             # 按钮触发
-            login_button = gr.Button("初始化")
+            login_button = gr.Button("上传")
             login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
 
-            gr.Markdown("## wsl notes")
-            instructions = """
-                # How to Install WSL and Ubuntu 22.04
+            gr.Markdown("### Subprocess Runner")
 
-                ## Step 1: Enable WSL and Virtualization Features
-                1. Open **PowerShell** as Administrator.
-                2. Run the following commands:
-                    ```
-                    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-                    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-                    ```
-                3. Restart your computer.
 
-                ## Step 2: Install Ubuntu 20.04
-                You can install Ubuntu 20.04 in two ways:
-                1. **Using Microsoft Store**:
-                - Open Microsoft Store.
-                - Search for "Ubuntu 20.04".
-                - Click "Get" or "Install".
-                2. **Using PowerShell**:
-                - Run the following command:
-                    ```
-                    wsl --install -d Ubuntu-22.04
-                    ```
+            project_x_path_input = gr.Textbox(label="Target Path for Project-X")
 
-                ## Step 3: Set Up Ubuntu
-                1. Launch Ubuntu.
-                2. Follow the on-screen instructions to set up your username and password.
-                """
-            gr.Markdown(instructions)
+            with gr.Row():
+                gr.Markdown("#### Project-X")
+                start_project_x_button = gr.Button("Start Project-X")
+                project_x_status = gr.Textbox(label="Project-X Status", interactive=False)
+
+            with gr.Row():
+                gr.Markdown("#### Cloudflare")
+                start_cloudflare_button = gr.Button("Start Cloudflare")
+                cloudflare_status = gr.Textbox(label="Cloudflare Status", interactive=False)
+
+
+            with gr.Row():
+                gr.Markdown("#### Stop Processes")
+                stop_processes_button = gr.Button("Stop All Processes")
+                stop_processes_status = gr.Textbox(label="Stop Processes Status", interactive=False)
+
+
+            # 按钮交互逻辑
+            #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
+            start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
+            start_cloudflare_button.click(start_cloudflare, inputs=project_x_path_input, outputs=cloudflare_status)
+            stop_processes_button.click(stop_processes, outputs=stop_processes_status)
+
+
+            # gr.Markdown("## wsl notes")
+            # instructions = """
+            #     # How to Install WSL and Ubuntu 22.04
+
+            #     ## Step 1: Enable WSL and Virtualization Features
+            #     1. Open **PowerShell** as Administrator.
+            #     2. Run the following commands:
+            #         ```
+            #         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+            #         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+            #         ```
+            #     3. Restart your computer.
+
+            #     ## Step 2: Install Ubuntu 20.04
+            #     You can install Ubuntu 20.04 in two ways:
+            #     1. **Using Microsoft Store**:
+            #     - Open Microsoft Store.
+            #     - Search for "Ubuntu 20.04".
+            #     - Click "Get" or "Install".
+            #     2. **Using PowerShell**:
+            #     - Run the following command:
+            #         ```
+            #         wsl --install -d Ubuntu-22.04
+            #         ```
+
+            #     ## Step 3: Set Up Ubuntu
+            #     1. Launch Ubuntu.
+            #     2. Follow the on-screen instructions to set up your username and password.
+            #     """
+            # gr.Markdown(instructions)
 
 demo.launch()

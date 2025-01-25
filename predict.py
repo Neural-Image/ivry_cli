@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 1.Please put your comfyUI path here:
-COMFYUI_PATH = {{dir_comfyui}}
+COMFYUI_PATH = '/mnt/E/comfyUI/ComfyUI'
 # 2.Please put your comfyUI port here: (by defalut is 127.0.0.1:8188 if you run "python main.py --listen")
-server_address = {{port_comfyui}}
+server_address = '127.0.0.1:8188'
 
 
 class Predictor(BasePredictor):
@@ -36,11 +36,12 @@ class Predictor(BasePredictor):
         guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     """
     def predict(self,
-                {{input_section}}
+                ivry_22_image: Path= Input(description=''),
+                
     ) -> Path:
         client_id = str(uuid.uuid4())
         # 4.put your workflow api path here:
-        workflow_file = {{workflow_dir}}
+        workflow_file = '/mnt/E/ivry_cli/comfyui_workflows/oilpet_api.json'
 
 
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
@@ -50,7 +51,8 @@ class Predictor(BasePredictor):
         '''
         In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
         '''
-        {{logic_section}}
+        prompt_config['22']['inputs']['image'] = str(ivry_22_image)
+        
 
         '''
         If your output node is not from comfy core, you need to define an output path 

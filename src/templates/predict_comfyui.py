@@ -93,4 +93,7 @@ class Predictor(BasePredictor):
         '''
 
 
-        return [output_path_list[0]] 
+        valid_outputs = [file for file in output_path_list if os.path.isfile(file)]
+
+
+        return valid_outputs 
