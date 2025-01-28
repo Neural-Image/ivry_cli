@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import signal
 from src.parse_InOut import parse_predict_return
+import re
 
 json_data = {}
 json_name = ""
@@ -28,6 +29,31 @@ signature = ''
 project_x_process = None
 cloudflare_process = None
 
+def generate_signature_file(project_name, signature_text):
+    #try:
+        if project_name == '':
+            raise ValueError("Pleas enter your project name")
+        if not os.path.isdir(project_name):
+            raise ValueError("Pleas init your project first")
+        #prefix = "{\n   const config = [\n"
+        prefix = "[\n"
+        suffix = "\n]"
+        #signature_text = "\n".join([line for line in signature_text.splitlines() if line.strip()])
+        #signature_text = re.sub(r",\s*([}\]])\s*\Z", r"\1", signature_text, flags=re.MULTILINE)
+        
+        signature_text = signature_text.rstrip()
+        if signature_text.endswith(","):
+            signature_text = signature_text[:-1]
+        
+        signature_text = prefix + signature_text + suffix
+        print(signature_text)
+        json_data = json.loads(signature_text)
+        with open(project_name + '/predict_signature.json', 'w') as file:
+            json.dump(json_data, file, indent=4, ensure_ascii=False)
+        
+        return project_name +"/predict_signature.json generated successfully!"
+    # except Exception as e:
+    #     return "", f"error meesage: {str(e)}"
 
 
 def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
@@ -533,11 +559,11 @@ def upload_python(file):
 def update_component_type(element_name):
     
     if python_dict_inputs[element_name] == "int":
-        component_name = ["slider","input","muti-select","single-select"]
+        component_name = ["slider","input","multi-select","single-select"]
     elif python_dict_inputs[element_name] == "float":
-        component_name = ["slider","input","muti-select","single-select"]
+        component_name = ["slider","input","multi-select","single-select"]
     elif python_dict_inputs[element_name] == "str":
-        component_name = ["textarea","input","muti-select","single-select"]
+        component_name = ["textarea","input","multi-select","single-select"]
     elif python_dict_inputs[element_name] == "bool":    
         component_name = ["checkbox"]
     elif python_dict_inputs[element_name] == "Path":
@@ -550,24 +576,75 @@ def update_component_type(element_name):
 def process_signature_selection(element_name, component_type):
     global signature
     if component_type == "slider":
-        signature +=  '''
-         {
-            component_type: "slider",
-            title: ''' + f"{element_name}" + ''',
-            description: "",
-            defaultvalue: ,
-            min: ,
-            max: ,
-        },'''
-    elif component_type == "input":
-        signature +=  '''
-         {
-            component_type: "input",
-            title: ''' + f"{element_name}" + ''',
-            description: "",
-            defaultvalue: "hello world",
-            placeholder: "type prompt here",
-        },'''
+        signature +=  '''{
+        "component_type": "slider",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "defaultvalue":"" ,
+        "min":0 ,
+        "max":10
+    },
+    '''
+    elif component_type == "input":   
+        signature +=  '''{
+        "component_type": "input",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "defaultvalue": "hello world",
+        "placeholder": "type prompt here"
+    },
+    '''
+    elif component_type == "multi-select":   
+        signature +=  '''{
+        "component_type": "multi-select",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "defaultvalue": [],
+        "options": [
+        { name: "Startup", ram: "12GB", cpus: "6 CPUs", disk: "256GB SSD disk" },
+        { name: "Business", ram: "16GB", cpus: "8 CPUs", disk: "512GB SSD disk" },
+        ]
+    },
+    '''
+    elif component_type == "checkbox":   
+        signature +=  '''{
+        "component_type": "checkbox",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "defaultvalue": "true"
+    },
+    '''
+    elif component_type == "single-select":   
+        signature +=  '''{
+        "component_type": "single-select",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "defaultvalue": "",
+        "options": [
+            "Tom Cook",
+            "Wade Cooper",
+            "Tanya Fox",
+            "Arlene Mccoy",
+            "Devon Webb"
+            ]
+    },
+    '''
+    elif component_type == "textarea":   
+        signature +=  '''{
+        "component_type": "textarea",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": "",
+        "placeholder": "type what you want here",
+        "defaultvalue": ""
+    },
+    '''
+    elif component_type == "file-upload":   
+        signature +=  '''{
+        "component_type": "file-upload",
+        "title": ''' + f'"{element_name}"' + ''',
+        "description": ""
+    },
+    '''
     return signature
     
 def delete_last_part(text):
@@ -577,6 +654,8 @@ def delete_last_part(text):
 
     if len(parts) > 0:  # 确保有多部分时才删除
         signature = "},".join(parts[:-1]) + "}"  # 重新拼接所有部分，去掉最后一部分
+        if signature == "}":
+            signature = ""
     else:
         signature = signature  # 如果只有一部分，保留原始数据
     return signature
@@ -722,27 +801,6 @@ with gr.Blocks() as demo:
             file_input.change(clear_cache, inputs=[], outputs=output_workflow)
             #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
 
-            
-            
-            
-
-
-            ###
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
             final_output = gr.Textbox(label="Output", interactive=False)
             generate_button = gr.Button("Generate predict.py")
@@ -774,13 +832,13 @@ with gr.Blocks() as demo:
                 component_type = gr.Dropdown(label="component type", choices=[], interactive=True)
 
             # 上传文件后更新主菜单
-            predict_signature_output = gr.Textbox(label="Result", interactive=True)
-            submit_button = gr.Button("Submit")
-            submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
-            # 删除按钮
-            delete_button = gr.Button("Delete Last component")
-            
+            with gr.Row():
+                submit_button = gr.Button("Submit")
+                # 删除按钮
+                delete_button = gr.Button("Delete Last component")
+            predict_signature_output = gr.Textbox(label="Result", interactive=True,max_lines=30)
             # 按下按钮后删除最后一行
+            submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
             delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
 
 
@@ -793,6 +851,17 @@ with gr.Blocks() as demo:
             #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
             python_input.change(clear_cache, inputs=[], outputs=output_workflow)
             #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
+
+            signature_final_output = gr.Textbox(label="signature Output", interactive=False)
+            with gr.Row():
+                preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="输入你的 Project 名字")
+                signature_generate_button = gr.Button("Generate predict_signature.json")
+            # 定义按钮点击行为
+            signature_generate_button.click(
+                generate_signature_file,
+                inputs=[preoject_siginature_name,predict_signature_output],
+                outputs=signature_final_output
+            )
 
         with gr.Tab("upload and host app"):
             gr.Markdown("## Step 4: upload your app, enter your project name")
