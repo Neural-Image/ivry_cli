@@ -6,7 +6,7 @@ import copy
 import os
 from pathlib import Path
 import signal
-
+from src.parse_InOut import parse_predict_return
 
 json_data = {}
 json_name = ""
@@ -23,6 +23,8 @@ final_inputs = []
 input_dict = {}
 input_type = {}
 workflow_json = ""
+python_dict_inputs = {}
+signature = ''
 project_x_process = None
 cloudflare_process = None
 
@@ -119,7 +121,7 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
     content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
     content = content.replace("{{port_comfyui}}", f"'{port_comfyui}'")
     content = content.replace("{{input_section}}", input_parameter)
-    content = content.replace("{{workflow_dir}}", f"'{absolute_path}'")
+    content = content.replace("{{workflow_dir}}", f"r'{absolute_path}'")
     content = content.replace("{{logic_section}}", logic_section)
 
 
@@ -499,6 +501,88 @@ def stop_processes():
 
     return "All server processes have been stopped."
 
+def upload_python_signature(file):
+    global python_dict_inputs
+    if file is not None:
+        # 读取 JSON 文件
+        from pathlib import Path
+        json_data = parse_predict_return(Path(file.name) ,"json")
+        python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
+
+        unique_keys = list(set(python_dict_inputs))  # 去重
+        return gr.update(choices=unique_keys, value=unique_keys[0])  # 更新 Dropdown 的选项
+        
+
+
+        
+    return gr.update(choices=[], value=None)
+
+
+def upload_python(file):
+    global python_dict_inputs
+    if file is not None:
+        # 读取 JSON 文件
+        from pathlib import Path
+        json_data = parse_predict_return(Path(file.name) ,"json")
+        python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
+
+        return python_dict_inputs  # 可以将数据存入全局变量或返回显示在界面上
+    return "No file uploaded!"
+
+
+def update_component_type(element_name):
+    
+    if python_dict_inputs[element_name] == "int":
+        component_name = ["slider","input","muti-select","single-select"]
+    elif python_dict_inputs[element_name] == "float":
+        component_name = ["slider","input","muti-select","single-select"]
+    elif python_dict_inputs[element_name] == "str":
+        component_name = ["textarea","input","muti-select","single-select"]
+    elif python_dict_inputs[element_name] == "bool":    
+        component_name = ["checkbox"]
+    elif python_dict_inputs[element_name] == "Path":
+        component_name = ["file-upload","single-select"]
+    if len(component_name) > 0:
+        return gr.update(choices=component_name, value=component_name[0] if component_name else None)
+    else:
+        return gr.update(choices=[], value=None)
+ 
+def process_signature_selection(element_name, component_type):
+    global signature
+    if component_type == "slider":
+        signature +=  '''
+         {
+            component_type: "slider",
+            title: ''' + f"{element_name}" + ''',
+            description: "",
+            defaultvalue: ,
+            min: ,
+            max: ,
+        },'''
+    elif component_type == "input":
+        signature +=  '''
+         {
+            component_type: "input",
+            title: ''' + f"{element_name}" + ''',
+            description: "",
+            defaultvalue: "hello world",
+            placeholder: "type prompt here",
+        },'''
+    return signature
+    
+def delete_last_part(text):
+    global signature
+    signature = text
+    parts = signature.strip().split("},")  # 按照 "}," 作为分隔点拆分
+
+    if len(parts) > 0:  # 确保有多部分时才删除
+        signature = "},".join(parts[:-1]) + "}"  # 重新拼接所有部分，去掉最后一部分
+    else:
+        signature = signature  # 如果只有一部分，保留原始数据
+    return signature
+
+
+
 
 with gr.Blocks() as demo:
     with gr.Tabs():
@@ -617,7 +701,7 @@ with gr.Blocks() as demo:
                 
 
             # 输出区域
-            output_workflow = gr.Textbox(label="Result")
+            output_workflow = gr.Textbox(label="Result", interactive=False)
 
             # 当主选单改变时，动态更新次级选单
             main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
@@ -668,6 +752,47 @@ with gr.Blocks() as demo:
                 inputs=[dir_comfyui, port_comfyui, output_workflow, os_system],
                 outputs=final_output
             )
+
+        with gr.Tab("Edit Inputs"):
+            gr.Markdown("# Edit your UI")
+
+            # 上传组件
+            python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
+            
+            # 输出组件
+            python_output = gr.JSON(label="File Content (Loaded in Memory)")
+            # 绑定上传文件和显示内容的逻辑
+            python_input.change(upload_python, inputs=python_input, outputs=python_output)
+            with gr.Row():
+                
+            
+                # 主选单
+                    # 主菜单（动态更新）
+                element_name = gr.Dropdown(label="element name", choices=[], interactive=True)
+                
+                # 次级菜单（动态更新）
+                component_type = gr.Dropdown(label="component type", choices=[], interactive=True)
+
+            # 上传文件后更新主菜单
+            predict_signature_output = gr.Textbox(label="Result", interactive=True)
+            submit_button = gr.Button("Submit")
+            submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
+            # 删除按钮
+            delete_button = gr.Button("Delete Last component")
+            
+            # 按下按钮后删除最后一行
+            delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
+
+
+
+
+
+            
+            element_name.change(update_component_type, inputs=element_name, outputs=component_type)
+            python_input.change(upload_python_signature, inputs=python_input, outputs=element_name)
+            #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+            python_input.change(clear_cache, inputs=[], outputs=output_workflow)
+            #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
 
         with gr.Tab("upload and host app"):
             gr.Markdown("## Step 4: upload your app, enter your project name")

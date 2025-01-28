@@ -40,3 +40,5 @@ gradio_predict.py
 /windows
 /myenv
 /comfyui_workflows
+predict.py
+predict_signature.json
