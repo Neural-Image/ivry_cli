@@ -1,4 +1,5 @@
 ## 🔥 Updates
+- **`2025/01/28`**: webui windows version - (TODO: 1.update app 2.signature json)
 - **`2025/01/23`**: webui beta
 - **`2025/01/20`**: log trunction (holding latest 5mb logs)
 - **`2025/01/20`**: logging interval (default logging interval - 1 sec)
@@ -95,7 +96,7 @@ pip install websocket-client
 ```
 
 ## TODO:
-**1. windows version**
+~~1. windows version~~
 
 ~~2. better command lines for start server~~
 
@@ -105,11 +106,11 @@ pip install websocket-client
 
 ~~5. project-x stop~~
 
-**6. cloudflare 验证，cloudflare 调用用户本机验证**
+~~6. cloudflare 验证，cloudflare 调用用户本机验证~~
    
-**7. more templates to test**
+~~7. more templates to test~~
    
-**8. minor bugs: a. stop generate unnessasary files**
+~~8. minor bugs: a. stop generate unnessasary files~~
 
 ~~9. better command lines for upload/update server~~
 
