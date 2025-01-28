@@ -56,21 +56,33 @@ def generate_signature_file(project_name, signature_text):
     #     return "", f"error meesage: {str(e)}"
 
 
+def get_wsl_distro_name():
+    result = subprocess.run(
+        ["bash", "-c", "echo $WSL_DISTRO_NAME"],  
+        stdout=subprocess.PIPE,                   
+        stderr=subprocess.PIPE,                   
+        text=True                                 
+    )
+    # 去除输出中的换行符并返回
+    return result.stdout.strip()
+
+
 def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
 
     
-
+    wsl_name = "Ubuntu"
     if os_system == '':
         raise ValueError("Please select your os system")
 
     if dir_comfyui == '':
         raise ValueError("Please enter your comfyUI dir")
     
-
+    
     if os_system == "windows":
         port_comfyui = get_local_ip(port_comfyui)
         print("port_comfyui", port_comfyui)
         dir_comfyui = win_path_to_wsl_path(dir_comfyui)
+        wsl_name = get_wsl_distro_name()
     else:
         port_comfyui = "127.0.0.1:" + str(port_comfyui)
 
@@ -119,7 +131,7 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
             if os_system != "windows":
                 logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
             else:
-                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + r"r'\\wsl$\Ubuntu-22.04\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
+                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
         else:
             logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
 
