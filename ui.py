@@ -28,9 +28,24 @@ cloudflare_process = None
 
 
 
-def generate_predict_file(dir_comfyui, port_comfyui, input_section):
+def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
+
+    
+
+    if os_system == '':
+        raise ValueError("Please select your os system")
+
     if dir_comfyui == '':
         raise ValueError("Please enter your comfyUI dir")
+    
+
+    if os_system == "windows":
+        port_comfyui = get_local_ip(port_comfyui)
+        print("port_comfyui", port_comfyui)
+        dir_comfyui = win_path_to_wsl_path(dir_comfyui)
+    else:
+        port_comfyui = "127.0.0.1:" + str(port_comfyui)
+
  
     os.makedirs("comfyui_workflows", exist_ok=True)
     with open("comfyui_workflows/" + json_name, "w") as output_file:
@@ -73,7 +88,10 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section):
         print('tmp_node_id', tmp_node_id)
         print('tmp_node_input', tmp_node_input)
         if tmp_node_typr == 'Path':
-            logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
+            if os_system != "windows":
+                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
+            else:
+                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + r"r'\\wsl$\Ubuntu-22.04\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
         else:
             logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
 
@@ -341,13 +359,13 @@ def run_upload(project_name):
 
 
 
-def get_local_ip():
+def get_local_ip(ip):
     # 执行 shell 命令
     try:
         result = subprocess.check_output(
             "ip route | grep default | awk '{print $3}'", shell=True, text=True
         ).strip()
-        return result + ":8188"
+        return result + ":" + str(ip)
     except subprocess.CalledProcessError as e:
         return f"Error: {e}"
 
@@ -389,6 +407,19 @@ def start_project_x(target_path):
                 "project-x", "start", "model",
                 "--upload-url=https://www.ivry.co/pc/client-api/upload"
             ],
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            cwd=target_dir  # 设置工作目录
+        )
+
+    global cloudflare_process
+    target_dir = Path(target_path)
+    if not target_dir.exists():
+        return f"Error: Target path '{target_path}' does not exist."
+
+    with open(target_dir / "cloudflare.log", "w") as log_file:
+        subprocess.Popen(
+            ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
             stdout=log_file,
             stderr=subprocess.STDOUT,
             cwd=target_dir  # 设置工作目录
@@ -519,15 +550,12 @@ with gr.Blocks() as demo:
             options_list = ["int", "float", "str", "Path" ,"bool"]
 
             gr.Markdown("## Cog predict.py Generator")
+            os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"], interactive=True)
             with gr.Row():
                 with gr.Column():
                     dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
-                    dir_button = gr.Button("If you are windows user, please use this to convert your windows dir to wsl dir")
-                    dir_button.click(win_path_to_wsl_path, inputs=dir_comfyui, outputs=dir_comfyui)
                 with gr.Column():    
-                    port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="127.0.0.1:8188")
-                    port_button = gr.Button("If you are windows user, please run webui in wsl and click this for ip")
-                    port_button.click(get_local_ip, outputs=port_comfyui)
+                    port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="8188")
             
             '''
             gr.Markdown("### Select an option from the list:")
@@ -637,7 +665,7 @@ with gr.Blocks() as demo:
             # 定义按钮点击行为
             generate_button.click(
                 generate_predict_file,
-                inputs=[dir_comfyui, port_comfyui, output_workflow],
+                inputs=[dir_comfyui, port_comfyui, output_workflow, os_system],
                 outputs=final_output
             )
 
@@ -663,11 +691,6 @@ with gr.Blocks() as demo:
                 start_project_x_button = gr.Button("Start Project-X")
                 project_x_status = gr.Textbox(label="Project-X Status", interactive=False)
 
-            with gr.Row():
-                gr.Markdown("#### Cloudflare")
-                start_cloudflare_button = gr.Button("Start Cloudflare")
-                cloudflare_status = gr.Textbox(label="Cloudflare Status", interactive=False)
-
 
             with gr.Row():
                 gr.Markdown("#### Stop Processes")
@@ -678,7 +701,6 @@ with gr.Blocks() as demo:
             # 按钮交互逻辑
             #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
             start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
-            start_cloudflare_button.click(start_cloudflare, inputs=project_x_path_input, outputs=cloudflare_status)
             stop_processes_button.click(stop_processes, outputs=stop_processes_status)
 
 
