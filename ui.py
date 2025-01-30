@@ -26,6 +26,7 @@ input_type = {}
 workflow_json = ""
 python_dict_inputs = {}
 signature = ''
+input_names = []
 project_x_process = None
 cloudflare_process = None
 
@@ -47,9 +48,9 @@ def generate_signature_file(project_name, signature_text):
         
         signature_text = prefix + signature_text + suffix
         print(signature_text)
-        json_data = json.loads(signature_text)
+        signature_json_data = json.loads(signature_text)
         with open(project_name + '/predict_signature.json', 'w') as file:
-            json.dump(json_data, file, indent=4, ensure_ascii=False)
+            json.dump(signature_json_data, file, indent=4, ensure_ascii=False)
         
         return project_name +"/predict_signature.json generated successfully!"
     # except Exception as e:
@@ -72,11 +73,12 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
     
     wsl_name = "Ubuntu"
     if os_system == '':
-        raise ValueError("Please select your os system")
+        #raise ValueError("Please select your os system")
+        return "Error: Please select your os system"
 
     if dir_comfyui == '':
-        raise ValueError("Please enter your comfyUI dir")
-    
+        #raise ValueError("Please enter your comfyUI dir")
+        return "Error: Please enter your comfyUI dir"
     
     if os_system == "windows":
         port_comfyui = get_local_ip(port_comfyui)
@@ -88,32 +90,40 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
 
  
     os.makedirs("comfyui_workflows", exist_ok=True)
+    if json_data == "" or json_data == "{}":
+        raise ValueError("Please upload correct api json")
     with open("comfyui_workflows/" + json_name, "w") as output_file:
         json.dump(json_data, output_file, indent=4)
 
     cur_input_dict = copy.deepcopy(input_dict)
     cur_input_type = copy.deepcopy(input_type)
 
-    if not dir_comfyui:
-        return "Error: Please enter your comfyUI dir!"
     # 读取模板文件内容
     input_parameter = ""
     with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
         content = template_file.read()
     # print(input_section)
+    
+    
     input_section = input_section.split(',')
+
     for index, i in enumerate(input_section):
         if "\n" in i:
-            input_section[index] = i.replace("\n", "")
+            input_section[index] = i.split("\n")[1]
         if i == '':
+            input_section.pop(index)
+        if "Input(description='" not in i:
             input_section.pop(index)
 
     # ### Inputs 
 
 
-    for i in input_section:
-        #input_dict[]
-        input_parameter = input_parameter + 'ivry_' + i + ",\n                "  
+    for index, i in enumerate(input_section):
+        if input_names[index] == "":
+            input_parameter = input_parameter + 'ivry_' + i + ",\n                "
+        else:
+            tmp = i.replace(i.split(':')[0], input_names[index], 1)
+            input_parameter = input_parameter + tmp + ",\n                "
 
     
     ###
@@ -125,15 +135,23 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
         tmp_node_id = i.split('_')[0]
         tmp_node_typr = cur_input_type[tmp_node_id][-1]
         tmp_node_input = cur_input_dict[tmp_node_id][-1]
-        print('tmp_node_id', tmp_node_id)
-        print('tmp_node_input', tmp_node_input)
+
         if tmp_node_typr == 'Path':
             if os_system != "windows":
-                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
+                if input_names[index] == "":
+                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
+                else:
+                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str({input_names[index]})" +  "\n        "
             else:
-                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
+                if input_names[index] == "":
+                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
+                else:
+                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str({input_names[index]})[5:]" +  "\n        "
         else:
-            logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
+            if input_names[index] == "":
+                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
+            else:
+                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = {input_names[index]}" +  "\n        "
 
         if len(cur_input_dict[tmp_node_id]) > 1:
             cur_input_dict[tmp_node_id].pop()
@@ -188,11 +206,19 @@ def delete_selection(option_to_delete):
 
 
 # 处理最终选择后的输出
-def process_selection(main_selection, sub_selection, sub_sub_selection):
+def process_selection(main_selection, sub_selection, sub_sub_selection, rename):
     global workflow_parsing
     global final_inputs
     global input_dict
     global input_type
+    global input_names
+    if rename in input_names:
+        return "This name is already taken. Please give another name."
+    if any(char in "!@#$%^&*-+=<>?/.,;:'\"[]{}\\|`~" for char in rename):
+        return "Please use letters or numbers."
+    if not rename[0].isalpha():  # 检查第一个字符是否是字母
+        return "Firts letter must be alphabeta"
+    
     if (main_selection.split(' ')[0] + sub_selection) not in final_inputs:
         if main_selection.split(' ')[0] not in input_dict:
             input_dict[main_selection.split(' ')[0]] = [sub_selection]
@@ -204,12 +230,15 @@ def process_selection(main_selection, sub_selection, sub_sub_selection):
         else:
             input_type[main_selection.split(' ')[0]].append(sub_sub_selection)
         
+        input_names.append(rename)
         
         final_inputs.append(main_selection.split(' ')[0] + sub_selection)
         if len(final_inputs) == 1:
-            workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + "= Input(description=''),"
+            workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + f"= Input(description=''),-------->{rename}<--------"
         else:
-            workflow_parsing += "\n" + main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + "= Input(description=''),"
+            workflow_parsing += "\n" + main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + f"= Input(description=''),-------->{rename}<--------"
+    else:
+        return "This key pairs already in predict.py, if you want to change it, please delete it with delete button first"
 
     return workflow_parsing
 
@@ -281,7 +310,18 @@ def clear_cache():
     global final_inputs
     global input_dict
     global input_type
-    
+    global rename
+    global json_name
+    global workflow_json
+    global python_dict_inputs
+    global signature
+    global input_names
+
+
+    json_name = ""
+    workflow_json = ""
+    python_dict_inputs = {}
+    signature = ''
     json_data = {}
     final_selection = []
     inputs_counter = {
@@ -294,8 +334,9 @@ def clear_cache():
     workflow_parsing = ""
     final_inputs = []
     input_dict = {}
+    input_names = []
     input_type = {}
-    return None  # 返回默认值以清空组件
+    return None  
 
 
 # 定义函数，删除文本框中的最后一行
@@ -304,7 +345,7 @@ def delete_last_line(text):
     global final_inputs
     global input_dict
     global input_type
-
+    global input_names
     
     if text.strip():  # 检查文本框是否为空
         workflow_lines = workflow_parsing.split("\n")
@@ -320,8 +361,7 @@ def delete_last_line(text):
                 del input_type[workflow_lines[-1].split('_')[0]]
             else:
                 input_type[workflow_lines[-1].split('_')[0]].pop()
-        print('input_dict',input_dict)
-        print('input_type',input_type)
+            input_names.pop()
         workflow_lines.pop()
         
         workflow_parsing = "\n".join(workflow_lines)
@@ -777,15 +817,15 @@ with gr.Blocks() as demo:
             
                 # 主选单
                     # 主菜单（动态更新）
-                main_menu = gr.Dropdown(label="Main Menu", choices=[], interactive=True)
+                main_menu = gr.Dropdown(label="Node Id and name", choices=[], interactive=True)
                 
                 # 次级菜单（动态更新）
-                sub_menu = gr.Dropdown(label="Sub Menu (Inputs)", choices=[], interactive=True)
+                sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
                     
 
-                sub_sub_menu = gr.Dropdown(label="Sub-Sub Menu (Last Selected List)", choices=options_list, interactive=True)
+                sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True)
 
-                
+                rename = gr.Textbox(label="Optional: give the input a name", interactive=True)
                 
             # 按钮
             submit_button = gr.Button("Submit")
@@ -798,7 +838,7 @@ with gr.Blocks() as demo:
             main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
 
             # 提交按钮处理最终结果
-            submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu], outputs=output_workflow)
+            submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu, rename], outputs=output_workflow)
             # 删除按钮
             delete_button = gr.Button("Delete Last Line")
             

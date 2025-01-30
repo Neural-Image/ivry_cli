@@ -43,3 +43,5 @@ gradio_predict.py
 predict.py
 predict_signature.json
 /win10
+/bug_test
+/ui_test
