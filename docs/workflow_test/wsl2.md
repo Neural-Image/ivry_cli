@@ -4,6 +4,7 @@ Open wsl_install.bat as an administrator.
 
 - Right click -> Run as administrator...
 
-You should see: (images/wsl_install.png)
+You should see: 
+![Output from running the above commands successfully.](images/wsl_install.png)
 
 
