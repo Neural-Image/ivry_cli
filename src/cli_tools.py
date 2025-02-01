@@ -59,14 +59,17 @@ class Cli:
         if not tmp.exists():
             raise Exception("Sorry, you need to init the project first.")
         else:
-            parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
+            signature_path = predict_path / "predict_signature.json"
+            if not signature_path.exists():
+                parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
         print("generating predict_signature.json")
         headers = {
         'X-API-KEY': str(apikey),
         'Content-Type': 'application/json',
         }
         url = IVRY_URL + "pc/client-api/predict_signature/" + str(model_id)
-        with open("./predict_signature.json", "r") as json_file:
+
+        with open(signature_path, "r") as json_file:
             data = json.load(json_file)
         payload = json.dumps(data, indent=4)
         

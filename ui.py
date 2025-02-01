@@ -29,6 +29,7 @@ signature = ''
 input_names = []
 project_x_process = None
 cloudflare_process = None
+signature_list = []
 
 def generate_signature_file(project_name, signature_text):
     #try:
@@ -316,8 +317,9 @@ def clear_cache():
     global python_dict_inputs
     global signature
     global input_names
+    global signature_list
 
-
+    signature_list = []
     json_name = ""
     workflow_json = ""
     python_dict_inputs = {}
@@ -627,80 +629,90 @@ def update_component_type(element_name):
  
 def process_signature_selection(element_name, component_type):
     global signature
-    if component_type == "slider":
-        signature +=  '''{
-        "component_type": "slider",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "defaultvalue":"" ,
-        "min":0 ,
-        "max":10
-    },
-    '''
-    elif component_type == "input":   
-        signature +=  '''{
-        "component_type": "input",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "defaultvalue": "hello world",
-        "placeholder": "type prompt here"
-    },
-    '''
-    elif component_type == "multi-select":   
-        signature +=  '''{
-        "component_type": "multi-select",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "defaultvalue": [],
-        "options": [
-        { name: "Startup", ram: "12GB", cpus: "6 CPUs", disk: "256GB SSD disk" },
-        { name: "Business", ram: "16GB", cpus: "8 CPUs", disk: "512GB SSD disk" },
-        ]
-    },
-    '''
-    elif component_type == "checkbox":   
-        signature +=  '''{
-        "component_type": "checkbox",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "defaultvalue": "true"
-    },
-    '''
-    elif component_type == "single-select":   
-        signature +=  '''{
-        "component_type": "single-select",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "defaultvalue": "",
-        "options": [
-            "Tom Cook",
-            "Wade Cooper",
-            "Tanya Fox",
-            "Arlene Mccoy",
-            "Devon Webb"
+    global signature_list
+
+    if element_name in signature_list:
+        return "This input already in the json, please select another one"
+    else:
+        signature_list.append(element_name)
+        if component_type == "slider":
+            signature +=  '''{
+            "component_type": "slider",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "defaultvalue":"" ,
+            "min":0 ,
+            "max":10
+        },
+        '''
+        elif component_type == "input":   
+            signature +=  '''{
+            "component_type": "input",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "defaultvalue": "hello world",
+            "placeholder": "type prompt here"
+        },
+        '''
+        elif component_type == "multi-select":   
+            signature +=  '''{
+            "component_type": "multi-select",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "defaultvalue": [],
+            "options": [
+            { name: "Startup", ram: "12GB", cpus: "6 CPUs", disk: "256GB SSD disk" },
+            { name: "Business", ram: "16GB", cpus: "8 CPUs", disk: "512GB SSD disk" },
             ]
-    },
-    '''
-    elif component_type == "textarea":   
-        signature +=  '''{
-        "component_type": "textarea",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": "",
-        "placeholder": "type what you want here",
-        "defaultvalue": ""
-    },
-    '''
-    elif component_type == "file-upload":   
-        signature +=  '''{
-        "component_type": "file-upload",
-        "title": ''' + f'"{element_name}"' + ''',
-        "description": ""
-    },
-    '''
+        },
+        '''
+        elif component_type == "checkbox":   
+            signature +=  '''{
+            "component_type": "checkbox",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "defaultvalue": "true"
+        },
+        '''
+        elif component_type == "single-select":   
+            signature +=  '''{
+            "component_type": "single-select",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "defaultvalue": "",
+            "options": [
+                "Tom Cook",
+                "Wade Cooper",
+                "Tanya Fox",
+                "Arlene Mccoy",
+                "Devon Webb"
+                ]
+        },
+        '''
+        elif component_type == "textarea":   
+            signature +=  '''{
+            "component_type": "textarea",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": "",
+            "placeholder": "type what you want here",
+            "defaultvalue": ""
+        },
+        '''
+        elif component_type == "file-upload":   
+            signature +=  '''{
+            "component_type": "file-upload",
+            "title": ''' + f'"{element_name}"' + ''',
+            "description": ""
+        },
+        '''
     return signature
     
 def delete_last_part(text):
     global signature
+    global signature_list
+    
+
+
     signature = text
     parts = signature.strip().split("},")  # 按照 "}," 作为分隔点拆分
 
@@ -708,6 +720,8 @@ def delete_last_part(text):
         signature = "},".join(parts[:-1]) + "}"  # 重新拼接所有部分，去掉最后一部分
         if signature == "}":
             signature = ""
+        if len(signature_list) > 0:
+            signature_list.pop()
     else:
         signature = signature  # 如果只有一部分，保留原始数据
     return signature
@@ -950,35 +964,12 @@ with gr.Blocks() as demo:
             stop_processes_button.click(stop_processes, outputs=stop_processes_status)
 
 
-            # gr.Markdown("## wsl notes")
-            # instructions = """
-            #     # How to Install WSL and Ubuntu 22.04
+            # input textbox syncup
+            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=upload_name_input)
+            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
+            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=preoject_siginature_name)
+                                                                                    
 
-            #     ## Step 1: Enable WSL and Virtualization Features
-            #     1. Open **PowerShell** as Administrator.
-            #     2. Run the following commands:
-            #         ```
-            #         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-            #         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-            #         ```
-            #     3. Restart your computer.
-
-            #     ## Step 2: Install Ubuntu 20.04
-            #     You can install Ubuntu 20.04 in two ways:
-            #     1. **Using Microsoft Store**:
-            #     - Open Microsoft Store.
-            #     - Search for "Ubuntu 20.04".
-            #     - Click "Get" or "Install".
-            #     2. **Using PowerShell**:
-            #     - Run the following command:
-            #         ```
-            #         wsl --install -d Ubuntu-22.04
-            #         ```
-
-            #     ## Step 3: Set Up Ubuntu
-            #     1. Launch Ubuntu.
-            #     2. Follow the on-screen instructions to set up your username and password.
-            #     """
-            # gr.Markdown(instructions)
+            upload_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
 
 demo.launch()
