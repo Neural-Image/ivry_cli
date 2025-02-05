@@ -782,7 +782,7 @@ with gr.Blocks() as demo:
             os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"], interactive=True)
             with gr.Row():
                 with gr.Column():
-                    dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir")
+                    dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir, (where your main.py locate) example: /home/ivry/comfyui", value="")
                 with gr.Column():    
                     port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="8188")
             
@@ -878,8 +878,8 @@ with gr.Blocks() as demo:
             )
 
         with gr.Tab("Edit Inputs"):
-            gr.Markdown("# Edit your UI")
-
+            gr.Markdown("# Edit your UI" )
+            gr.Markdown("## Upload your predict.py (If you just used predict.py generator, predict.py locate in your ivry root folder)")
             # 上传组件
             python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
             
