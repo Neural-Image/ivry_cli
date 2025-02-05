@@ -97,11 +97,16 @@ pip install websocket-client
 ```
 
 ## TODO:
+** Input name with space **
+** Notification for webui **
+** Webui insturctions **
+** Workflow pack **
+
 ~~1. windows version~~
 
 ~~2. better command lines for start server~~
 
-**3. better template code for comfyUI**
+~~3. better template code for comfyUI~~
 
 ~~4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？~~
 
