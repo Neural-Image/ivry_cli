@@ -6,6 +6,8 @@
 - **`2025/01/20`**: logging interval (default logging interval - 1 sec)
 - **`2025/01/20`**: Organizing more hyperparameters (website url)
 
+For windows user: [Windows Installation](docs/workflow_test/wsl2.md)
+
 ## Installation
 1. clone the repo
 2. install the cli:
