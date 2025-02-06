@@ -213,6 +213,8 @@ def process_selection(main_selection, sub_selection, sub_sub_selection, rename):
     global input_dict
     global input_type
     global input_names
+    if " " in rename:
+        return "Please use underscore instead of space"
     if rename in input_names:
         return "This name is already taken. Please give another name."
     if any(char in "!@#$%^&*-+=<>?/.,;:'\"[]{}\\|`~" for char in rename):
