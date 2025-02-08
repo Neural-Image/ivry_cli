@@ -10,6 +10,10 @@ You should see:
 
 ![Output from running the above commands successfully.](images/wsl_install.png)
 
+If you cannot run this file sucssessfully, try:
+
+Go to microsoft store and install ubuntu-22.04
+
 ### 1.2 reboot
 Before moving forward, make sure you reboot your computer so that Windows 11 will have WSL2 and virtualization available to it.
 
