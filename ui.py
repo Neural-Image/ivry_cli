@@ -757,6 +757,18 @@ def delete_last_part(text):
     return signature
 
 
+def refresh_logs(project_name):
+    log_path = project_name + "/client.log"
+    try:
+        with open(log_path, "r") as log_file:
+            logs = log_file.read()
+        return logs
+    except FileNotFoundError:
+        return "No logs available yet."
+    except Exception as e:
+        return f"Error reading logs: {e}"
+
+
 
 
 with gr.Blocks() as demo:
@@ -987,7 +999,11 @@ with gr.Blocks() as demo:
                 stop_processes_button = gr.Button("Stop All Processes")
                 stop_processes_status = gr.Textbox(label="Stop Processes Status", interactive=False)
 
-
+            log_output = gr.Textbox(label="Logs", lines=20, interactive=False)
+            refresh_button = gr.Button("Refresh Logs")
+            refresh_button.click(refresh_logs, inputs=project_x_path_input ,outputs=log_output)
+        
+        
             # 按钮交互逻辑
             #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
             start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
