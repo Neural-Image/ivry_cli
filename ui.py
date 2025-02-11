@@ -31,6 +31,29 @@ project_x_process = None
 cloudflare_process = None
 signature_list = []
 
+def validate_signature_data(signature_data):
+    for item in signature_data:
+        component_type = item.get("component_type")
+        if component_type == "slider":
+            if "min" not in item or "max" not in item:
+                return f"Error: Missing range for slider '{item.get('title')}'"
+            if not isinstance(item["min"], (int, float)) or not isinstance(item["max"], (int, float)):
+                return f"Error: Slider '{item.get('title')}' must have numeric min and max values"
+            if item["min"] >= item["max"]:
+                return f"Error: Slider '{item.get('title')}' min must be less than max"
+        elif component_type == "input":
+            if "defaultvalue" not in item:
+                return f"Error: Missing defaultvalue for input '{item.get('title')}'"
+        elif component_type == "checkbox":
+            if "defaultvalue" not in item or not isinstance(item["defaultvalue"], bool):
+                return f"Error: Checkbox '{item.get('title')}' must have a boolean defaultvalue"
+        elif component_type == "file-upload":
+            if "description" not in item:
+                return f"Error: Missing description for file-upload '{item.get('title')}'"
+        # Add more checks for other types if necessary
+    return None
+
+
 def generate_signature_file(project_name, signature_text):
     #try:
         if project_name == '':
@@ -50,6 +73,11 @@ def generate_signature_file(project_name, signature_text):
         signature_text = prefix + signature_text + suffix
         print(signature_text)
         signature_json_data = json.loads(signature_text)
+        validation_error = validate_signature_data(signature_json_data)
+        if validation_error:
+            return validation_error
+        
+        
         with open(project_name + '/predict_signature.json', 'w') as file:
             json.dump(signature_json_data, file, indent=4, ensure_ascii=False)
         
@@ -127,7 +155,7 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
             input_parameter = input_parameter + tmp + ",\n                "
 
     
-    ###
+
 
     ### workflow json
 
