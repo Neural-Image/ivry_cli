@@ -1,4 +1,5 @@
 ## 🔥 Updates
+- **`2025/02/08`**: webui add: 1. input type validation 2. log monitor
 - **`2025/01/29`**: webui add: 1. inputs rename 2. workflow api json check 3. inputs dupilcation check
 - **`2025/01/28`**: webui windows version - (TODO: 1.update app 2.signature json)
 - **`2025/01/23`**: webui beta
