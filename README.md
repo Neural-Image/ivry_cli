@@ -1,138 +1,170 @@
-## 🔥 Updates
-- **`2025/02/08`**: webui add: 1. input type validation 2. log monitor
-- **`2025/01/29`**: webui add: 1. inputs rename 2. workflow api json check 3. inputs dupilcation check
-- **`2025/01/28`**: webui windows version - (TODO: 1.update app 2.signature json)
-- **`2025/01/23`**: webui beta
-- **`2025/01/20`**: log trunction (holding latest 5mb logs)
-- **`2025/01/20`**: logging interval (default logging interval - 1 sec)
-- **`2025/01/20`**: Organizing more hyperparameters (website url)
+# Project-X Documentation
 
-For windows user: [Windows Installation](docs/workflow_test/wsl2.md)
+## 🔥 Updates
+
+- **2025/02/08**: WebUI updates:
+  - Input type validation
+  - Log monitor
+- **2025/01/29**: WebUI updates:
+  - Inputs renamed
+  - Workflow API JSON validation
+  - Duplicate input check
+- **2025/01/28**: WebUI Windows version (TODO: Update app, signature JSON)
+- **2025/01/23**: WebUI Beta release
+- **2025/01/20**: Logging improvements:
+  - Log truncation (holds latest 5MB logs)
+  - Default logging interval set to 1 second
+  - Organized hyperparameters (Website URL)
+
+### Windows Users
+For installation instructions on Windows, refer to: [Windows Installation Guide](docs/workflow_test/wsl2.md)
+
+---
 
 ## Installation
-1. clone the repo
-2. install the cli:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/project-x.git
+   cd project-x
+   ```
+2. Install the CLI:
+   ```bash
+   cd ivry_cli
+   pip install -e .
+   ```
+
+---
+
+## Authentication
+
+1. Retrieve your API key from our website.
+2. Login using the CLI:
+   ```bash
+   project-x login --auth_token {your_apikey}
+   ```
+
+---
+
+## Initializing a Project
+
+Currently, the CLI supports two modes: `comfyui` and `model`.
+
 ```bash
-cd ivry_cli
-pip install -e .
+project-x init_app --project_name {project_name} --mode {comfyui/model}
 ```
 
-## Login from cli
-1. get your apikey from our website
-2. login by cli:
+### Examples:
+- For **ComfyUI**:
+  ```bash
+  project-x init_app --project_name my_project --mode comfyui
+  ```
+- For **Model-based projects**:
+  ```bash
+  project-x init_app --project_name my_project --mode model
+  ```
+
+Once initialized, a project folder is created, and a `predict.py` file will be available. Edit `predict.py` according to your model or workflow requirements.
+
+---
+
+## Uploading Your Project
+
+### Important: Use Absolute Paths in `predict.py`
+
+Your `predict.py` file is located under:
 ```bash
-project-x login --auth_token {your_apikey}
+/ivry_cli/{project_name}/predict.py
 ```
+Modify the script as needed, following the provided comments, and then upload your app:
 
-## Init your project
-Current version support --mode comfyui/model
 ```bash
-project-x init_app --project_name {project name} --mode {comfyui/model} #example: project-x init_app --project_name colab_test --mode model
+project-x upload_app --model_name {project_name}
 ```
-if you are using comfyUI:
+Or navigate to the project directory and execute:
 ```bash
-project-x init_app --project_name {project name} --mode comfyui
-```
-
-if you are using model:
-```bash
-project-x init_app --project_name {project name} --mode model
-```
-
-Your project folder should generated, and you can find predict.py in it. Next step is to edit predict.py based on your workflow or model.
-
-
-## Upload your project
-`TODO: add cd to dir version`
-### Please put absolute dir in predict.py ###
-
-Your predict.py location is under /ivry_cli/{project name}/predict.py 
-You need to edit it based on the comments
-After you finish editing 'predict.py' in your project, you can upload your app to our website:
-
-```bash
-project-x upload_app --model_name {project name} #example: colab_test
-```
-or
-```bash
-cd {project name}
+cd {project_name}
 project-x upload_app
 ```
 
-## Check your model status
-You can check your uploaded models on our websites:
+---
+
+## Managing Your Model
+
+### Check Uploaded Models
 ```bash
 project-x list_models
 ```
-## OPTIONS: update your app if you changed your predict.py after uploaded:
+
+### Update an Existing Model
+If you update `predict.py` after uploading, you can update your model:
 ```bash
-project-x update_app --model_id {model_id} --model_name {project name} #example: project-x update_app --model_id ivrymodel67 --model_name colab_test
+project-x update_app --model_id {model_id} --model_name {project_name}
 ```
-or
+Or use:
 ```bash
-cd {project name}
+cd {project_name}
 project-x update_app --model_id {model_id}
 ```
 
+---
 
-## Start to host your project
-start your app:
+## Hosting Your Project
+
+### Start the Server
+#### Linux:
 ```bash
-# linux:
 wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 dpkg -i cloudflared-linux-amd64.deb
-# macOS:
+```
+#### macOS:
+```bash
 brew install cloudflare/cloudflare/cloudflared
-
-cd {project name}
+```
+#### Start the Project:
+```bash
+cd {project_name}
 project-x start_server
 ```
-stop your app:
+
+### Stop the Server
 ```bash
 project-x stop_server
 ```
 
-### Trouble shot: ###
-if your project-x start server encounter websocket problem you can try:
+---
+
+## Troubleshooting
+
+### WebSocket Issues
+If you encounter WebSocket errors when starting the server, try:
 ```bash
 pip uninstall websockets
 pip install websocket-client
 ```
 
-## TODO:
+---
 
-** Input name with space **
+## TODOs
 
-** Notification for webui **
+- [ ] Support input names with spaces
+- [ ] Add notification system for WebUI
+- [ ] Improve WebUI instructions
+- [ ] Implement workflow packaging
 
-** Webui insturctions **
+### Completed Tasks:
+✅ Windows version support  
+✅ Improved command-line options for `start_server`  
+✅ Enhanced template code for ComfyUI  
+✅ Cloudflare research & configuration validation  
+✅ `project-x stop` command  
+✅ Expanded testing templates  
+✅ Eliminated unnecessary file generation  
+✅ Improved `upload/update` command-line experience  
+✅ Log truncation (Completed on 2025/01/20)  
+✅ Logging interval configuration (Completed on 2025/01/20)  
+✅ Organized hyperparameters (Completed on 2025/01/20)  
 
-** Workflow pack **
+---
 
-~~1. windows version~~
-
-~~2. better command lines for start server~~
-
-~~3. better template code for comfyUI~~
-
-~~4. cloudflare 使用方法研究，为什么 buffersize不够还是可以用。 config.json 是否存在问题？~~
-
-~~5. project-x stop~~
-
-~~6. cloudflare 验证，cloudflare 调用用户本机验证~~
-   
-~~7. more templates to test~~
-   
-~~8. minor bugs: a. stop generate unnessasary files~~
-
-~~9. better command lines for upload/update server~~
-
-~~10. log trunction~~ 1/20
-
-~~11. logging interval~~ 1/20
-
-~~11. Organizing more hyperparameters~~ 1/20
-
-
-
-
+For more details, visit our documentation or reach out via support channels!
