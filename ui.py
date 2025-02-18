@@ -778,7 +778,7 @@ with gr.Blocks() as demo:
         with gr.Tab("ivry init"):
             gr.Markdown("# Init Ivry")
             gr.Markdown("## Step 1: Login to ivry! Creat your account and enter your apikey.")
-            with gr.Accordion("点击展开查看嵌入网站", open=False): 
+            with gr.Accordion("click to see ivry website", open=False): 
                 gr.HTML("""
                             <iframe 
                                 src="https://www.ivry.co/account" 
@@ -788,28 +788,28 @@ with gr.Blocks() as demo:
                             </iframe>
                         """)
 
-            gr.Markdown("### 输入 API Key 来登录 Project-X")
+            gr.Markdown("### enter your apikey to login to ivry")
     
             # 输入组件
-            api_key_input = gr.Textbox(label="API Key", placeholder="输入你的 API Key", type="password")
+            api_key_input = gr.Textbox(label="API Key", placeholder="enter your API Key", type="password")
             
             # 输出组件
-            output_text = gr.Textbox(label="登录结果")
+            output_text = gr.Textbox(label="login result")
             
             # 按钮触发
-            login_button = gr.Button("登录")
+            login_button = gr.Button("api login")
             login_button.click(run_login, inputs=api_key_input, outputs=output_text)
 
             gr.Markdown("## Step 2: init your app! Please give it a good name!")
 
             # 输入组件
-            project_name_input = gr.Textbox(label="Project Name", placeholder="输入你的 Project 名字")
+            project_name_input = gr.Textbox(label="Project Name", placeholder="enter your project name")
             
             # 输出组件
-            init_output_text = gr.Textbox(label="初始化结果")
+            init_output_text = gr.Textbox(label="init result")
             
             # 按钮触发
-            login_button = gr.Button("初始化")
+            login_button = gr.Button("init")
             login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
 
             gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
@@ -962,7 +962,7 @@ with gr.Blocks() as demo:
 
             signature_final_output = gr.Textbox(label="signature Output", interactive=False)
             with gr.Row():
-                preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="输入你的 Project 名字")
+                preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="enter your project name")
                 signature_generate_button = gr.Button("Generate predict_signature.json")
             # 定义按钮点击行为
             signature_generate_button.click(
@@ -974,13 +974,13 @@ with gr.Blocks() as demo:
         with gr.Tab("upload and host app"):
             gr.Markdown("## Step 4: upload your app, enter your project name")
             # 输入组件
-            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="输入你的 Project 名字")
+            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="enter your project name")
             
             # 输出组件
-            upload_output_text = gr.Textbox(label="上传结果")
+            upload_output_text = gr.Textbox(label="upload result")
             
             # 按钮触发
-            login_button = gr.Button("上传")
+            login_button = gr.Button("upload")
             login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
 
             gr.Markdown("### Subprocess Runner")
