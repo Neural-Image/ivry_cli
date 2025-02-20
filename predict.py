@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 1.Please put your comfyUI path here:
-COMFYUI_PATH = '/mnt/c/Users/steve/Desktop/ComfyUI_windows_portable/ComfyUI'
+COMFYUI_PATH = 'a'
 # 2.Please put your comfyUI port here: (by defalut is 127.0.0.1:8188 if you run "python main.py --listen")
-server_address = '172.20.80.1:8188'
+server_address = '127.0.0.1:8188'
 
 
 class Predictor(BasePredictor):
@@ -36,15 +36,15 @@ class Predictor(BasePredictor):
         guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     """
     def predict(self,
-                ivry_10_image: Path= Input(description=''),
-                ivry_3_steps: int= Input(description=''),
-                ivry_6_text: str= Input(description=''),
-                ivry_7_text: str= Input(description=''),
+                user_image: Path= Input(description=''),
+                steps: int= Input(description=''),
+                cfg: float= Input(description=''),
+                scheduler: str= Input(description=''),
                 
     ) -> Path:
         client_id = str(uuid.uuid4())
         # 4.put your workflow api path here:
-        workflow_file = r'/mnt/c/Users/steve/Desktop/ivry_cli/comfyui_workflows/win10.json'
+        workflow_file = r'/Users/steveyang/Desktop/ivry_cli/comfyui_workflows/01_16_cat_girl_api 1.json'
 
 
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
@@ -54,10 +54,10 @@ class Predictor(BasePredictor):
         '''
         In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
         '''
-        prompt_config['10']['inputs']['image'] = r'\\wsl$\Ubuntu\tmp'+ '/' +str(ivry_10_image)[5:]
-        prompt_config['3']['inputs']['steps'] = ivry_3_steps
-        prompt_config['6']['inputs']['text'] = ivry_6_text
-        prompt_config['7']['inputs']['text'] = ivry_7_text
+        prompt_config['13']['inputs']['image'] = str(user_image)
+        prompt_config['3']['inputs']['steps'] = steps
+        prompt_config['3']['inputs']['cfg'] = cfg
+        prompt_config['3']['inputs']['scheduler'] = scheduler
         
 
         '''

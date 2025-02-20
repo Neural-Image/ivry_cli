@@ -98,7 +98,7 @@ def get_wsl_distro_name():
 
 
 def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
-
+    print("input_section",input_section)
     
     wsl_name = "Ubuntu"
     if os_system == '':
@@ -161,9 +161,15 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
 
     logic_section = ""
     for index, i in enumerate(input_section):
+        #print("input_section",input_section)
+        
         tmp_node_id = i.split('_')[0]
-        tmp_node_typr = cur_input_type[tmp_node_id][-1]
-        tmp_node_input = cur_input_dict[tmp_node_id][-1]
+        tmp_node_typr = cur_input_type[tmp_node_id][0]
+        tmp_node_input = cur_input_dict[tmp_node_id][0]
+        # print("tmp_node_id",tmp_node_id)
+        # print("tmp_node_typr",tmp_node_typr)
+        # print("tmp_node_input",tmp_node_input)
+        # print("input_names",input_names)
 
         if tmp_node_typr == 'Path':
             if os_system != "windows":
@@ -183,8 +189,8 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
                 logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = {input_names[index]}" +  "\n        "
 
         if len(cur_input_dict[tmp_node_id]) > 1:
-            cur_input_dict[tmp_node_id].pop()
-            cur_input_type[tmp_node_id].pop()
+            cur_input_dict[tmp_node_id].pop(0)
+            cur_input_type[tmp_node_id].pop(0)
 
 
 
@@ -413,11 +419,11 @@ def run_login(api_key):
         
         # 根据执行结果返回
         if result.returncode == 0:
-            return f"成功登录！输出：\n{result.stdout}"
+            return f"login success! output:\n{result.stdout}"
         else:
-            return f"登录失败！错误：\n{result.stderr}"
+            return f"login failed! error:\n{result.stderr}"
     except Exception as e:
-        return f"执行命令出错：{str(e)}"
+        return f"exec error:{str(e)}"
     
 def run_init(project_name):
     try:
@@ -429,11 +435,11 @@ def run_init(project_name):
         
         # 根据执行结果返回
         if result.returncode == 0:
-            return f"成功初始化！输出：\n{result.stdout}"
+            return f"init success! output:\n{result.stdout}"
         else:
-            return f"初始化失败！错误：\n{result.stderr}"
+            return f"init failed! error:\n{result.stderr}"
     except Exception as e:
-        return f"执行命令出错：{str(e)}"
+        return f"exec error:{str(e)}"
 
 def run_upload(project_name):
     if project_name == '':
