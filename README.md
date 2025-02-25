@@ -3,7 +3,7 @@
 2. `pip install -e .`
 
 ### start server
-`project-x start model --upload-url=http://localhost:3010/upload_file`
+`project-x start model --upload-url=http://localhost:3000/api/cli/upload`
 
 ### start mockup business server
 `project-x start business`
