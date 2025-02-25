@@ -7,6 +7,6 @@
 # # ComfyUI entrypoint
 # # predict: "path/to/main.py:ComfyUI"
 # # Custom model entrypoint
-# # predict: "predict.py:Predictor"
-predict: "predict_comfyui.py:Predictor"
+predict: "predict.py:Predictor"
+# predict: "predict_comfyui.py:Predictor"
 

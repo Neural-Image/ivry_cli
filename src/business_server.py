@@ -5,9 +5,11 @@ import os
 import json
 
 from typing import Annotated
+import httpx
 
 
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('business_server')
@@ -76,6 +78,14 @@ def main():
         prediction_id = payload.get("id")
         logs = payload.get("logs")
         output = payload.get("output")
+
+        # If the event type is "succeeded", make a request to localhost:3009/health-check
+        if event_type == "succeeded":
+            time.sleep(30)
+            async with httpx.AsyncClient() as client:
+                response = await client.get("http://localhost:3009/health-check")
+                # Print or log the response
+                logger.info(f"Health-check response: {response.text}")        
         
         # Return a success response
         return {"message": "Webhook received successfully"}

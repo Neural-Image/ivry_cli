@@ -13,7 +13,7 @@ class Predictor(BasePredictor):
                 prompt: str = Input(default="hello", max_length=1000, description="this is a prompt"),
                 steps: int = Input(default=50, ge=0, le=1000, description="steps"),
                 guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
-    ) -> Path:
+    ) -> list[Path]:
         print("input image:", image)
         img = Image.open(image)
         original_width, original_height = img.size
@@ -24,9 +24,10 @@ class Predictor(BasePredictor):
         sleep(2)
         print(12345)
         # Resize the image
+        # raise Exception("my error")
         resized_img = img.resize((new_width, new_height))
-        sleep(2)
+        sleep(4)
         print(image.stem)
         output_path = Path(tempfile.mkdtemp()) / f"{image.stem}_downscale.jpg"
         resized_img.save(output_path)        
-        return output_path
+        return [output_path]
