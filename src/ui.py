@@ -6,7 +6,7 @@ import copy
 import os
 from pathlib import Path
 import signal
-from src.parse_InOut import parse_predict_return
+from parse_InOut import parse_predict_return
 import re
 
 json_data = {}
@@ -412,7 +412,7 @@ def delete_last_line(text):
 def run_login(api_key):
     try:
         # 构造命令
-        command = f"project-x login {api_key}"
+        command = f"ivry_cli login {api_key}"
         
         # 运行命令
         result = subprocess.run(command, shell=True, text=True, capture_output=True)
@@ -428,7 +428,7 @@ def run_login(api_key):
 def run_init(project_name):
     try:
         # 构造命令
-        command = f"project-x init_app --project_name {project_name} --mode comfyui"
+        command = f"ivry_cli init_app --project_name {project_name} --mode comfyui"
         
         # 运行命令
         result = subprocess.run(command, shell=True, text=True, capture_output=True)
@@ -461,7 +461,7 @@ def run_upload(project_name):
 
     try:
         # 构造命令
-        command = f"project-x upload_app --model_name {project_name}"
+        command = f"ivry_cli upload_app --model_name {project_name}"
         
         # 运行命令
         result = subprocess.run(command, shell=True, text=True, capture_output=True)
@@ -513,7 +513,7 @@ def start_project_x(target_path):
     if target_path == '':
         raise ValueError("Please enter your project name")
 
-    """运行 project-x 子进程，并写入日志文件。"""
+    """运行 ivry_cli 子进程，并写入日志文件。"""
     global project_x_process
     target_dir = Path(target_path)
     if not target_dir.exists():
@@ -522,7 +522,7 @@ def start_project_x(target_path):
     with open(target_dir / "client.log", "w") as log_file:
         subprocess.Popen(
             [
-                "project-x", "start", "model",
+                "ivry_cli", "start", "model",
                 "--upload-url=https://www.ivry.co/pc/client-api/upload"
             ],
             stdout=log_file,
@@ -542,7 +542,7 @@ def start_project_x(target_path):
             stderr=subprocess.STDOUT,
             cwd=target_dir  # 设置工作目录
         )
-    return f"Project-X started in {target_path}. Logs are being written to client.log."
+    return f"ivry_cli started in {target_path}. Logs are being written to client.log."
 
 def start_cloudflare(target_path):
 
@@ -607,8 +607,8 @@ def stop_processes():
         except Exception as e:
             print(f"Error stopping {name}: {e}")
 
-    # Terminate `project-x` process
-    terminate_process("project-x")
+    # Terminate `ivry_cli` process
+    terminate_process("ivry_cli")
 
     # Terminate `cloudflared` process
     terminate_process("cloudflared tunnel --config tunnel_config.json run")
@@ -777,251 +777,260 @@ def refresh_logs(project_name):
 
 
 
-with gr.Blocks() as demo:
-    with gr.Tabs():
+
+
+
+
+def main():
+    print("Starting Gradio UI...")
+    with gr.Blocks() as demo:
+        with gr.Tabs():
+            
+
+            with gr.Tab("ivry init"):
+                gr.Markdown("# Init Ivry")
+                gr.Markdown("## Step 1: Login to ivry! Creat your account and enter your apikey.")
+                with gr.Accordion("click to see ivry website", open=False): 
+                    gr.HTML("""
+                                <iframe 
+                                    src="https://www.ivry.co/account" 
+                                    width="100%" 
+                                    height="500" 
+                                    frameborder="0">
+                                </iframe>
+                            """)
+
+                gr.Markdown("### enter your apikey to login to ivry")
         
-
-        with gr.Tab("ivry init"):
-            gr.Markdown("# Init Ivry")
-            gr.Markdown("## Step 1: Login to ivry! Creat your account and enter your apikey.")
-            with gr.Accordion("click to see ivry website", open=False): 
-                gr.HTML("""
-                            <iframe 
-                                src="https://www.ivry.co/account" 
-                                width="100%" 
-                                height="500" 
-                                frameborder="0">
-                            </iframe>
-                        """)
-
-            gr.Markdown("### enter your apikey to login to ivry")
-    
-            # 输入组件
-            api_key_input = gr.Textbox(label="API Key", placeholder="enter your API Key", type="password")
-            
-            # 输出组件
-            output_text = gr.Textbox(label="login result")
-            
-            # 按钮触发
-            login_button = gr.Button("api login")
-            login_button.click(run_login, inputs=api_key_input, outputs=output_text)
-
-            gr.Markdown("## Step 2: init your app! Please give it a good name!")
-
-            # 输入组件
-            project_name_input = gr.Textbox(label="Project Name", placeholder="enter your project name")
-            
-            # 输出组件
-            init_output_text = gr.Textbox(label="init result")
-            
-            # 按钮触发
-            login_button = gr.Button("init")
-            login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
-
-            gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
-
-        with gr.Tab("Predict.py Generator"):
-            # TODO 
-            # Add json file dir
-        
-            options_list = ["int", "float", "str", "Path" ,"bool"]
-
-            gr.Markdown("## Cog predict.py Generator")
-            os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"], interactive=True)
-            with gr.Row():
-                with gr.Column():
-                    dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir, (where your main.py locate) example: /home/ivry/comfyui", value="")
-                with gr.Column():    
-                    port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="8188")
-            
-            '''
-            gr.Markdown("### Select an option from the list:")
-
-            input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
-            with gr.Row():
-            # 创建一个Radio组件
-                
-                with gr.Column():
-                # 创建一个显示最终选择列表的输出区域
-                    output = gr.Textbox(label="Selected List", lines=5)
-                    
-                    # 添加按钮和交互逻辑
-                    button = gr.Button("Add to List")
-                    button.click(update_selection, inputs=input_section, outputs=output)
-
-                with gr.Column():
-                    gr.Markdown("### Delete an option:")
-                    delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
-                    delete_button = gr.Button("Delete from List")
-                    delete_button.click(delete_selection, inputs=delete_input, outputs=output)
-                '''
-            gr.Markdown("### Upload a JSON File")
-            with gr.Row():
-                ### workflow
-                    
-                
-            
-                # 上传组件
-                file_input = gr.File(label="Upload JSON File", file_types=[".json"])
+                # 输入组件
+                api_key_input = gr.Textbox(label="API Key", placeholder="enter your API Key", type="password")
                 
                 # 输出组件
-                json_output = gr.JSON(label="File Content (Loaded in Memory)")
+                output_text = gr.Textbox(label="login result")
                 
-                # 绑定上传文件和显示内容的逻辑
-                file_input.change(upload_json, inputs=file_input, outputs=json_output)
-                
+                # 按钮触发
+                login_button = gr.Button("api login")
+                login_button.click(run_login, inputs=api_key_input, outputs=output_text)
 
-                main_options = extract_keys(json_data)
+                gr.Markdown("## Step 2: init your app! Please give it a good name!")
 
-            gr.Markdown("### Choose your inputs")
-            with gr.Row():
+                # 输入组件
+                project_name_input = gr.Textbox(label="Project Name", placeholder="enter your project name")
                 
+                # 输出组件
+                init_output_text = gr.Textbox(label="init result")
+                
+                # 按钮触发
+                login_button = gr.Button("init")
+                login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
+
+                gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
+
+            with gr.Tab("Predict.py Generator"):
+                # TODO 
+                # Add json file dir
             
-                # 主选单
-                    # 主菜单（动态更新）
-                main_menu = gr.Dropdown(label="Node Id and name", choices=[], interactive=True)
+                options_list = ["int", "float", "str", "Path" ,"bool"]
+
+                gr.Markdown("## Cog predict.py Generator")
+                os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"], interactive=True)
+                with gr.Row():
+                    with gr.Column():
+                        dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir, (where your main.py locate) example: /home/ivry/comfyui", value="")
+                    with gr.Column():    
+                        port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="8188")
                 
-                # 次级菜单（动态更新）
-                sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
+                '''
+                gr.Markdown("### Select an option from the list:")
+
+                input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
+                with gr.Row():
+                # 创建一个Radio组件
+                    
+                    with gr.Column():
+                    # 创建一个显示最终选择列表的输出区域
+                        output = gr.Textbox(label="Selected List", lines=5)
+                        
+                        # 添加按钮和交互逻辑
+                        button = gr.Button("Add to List")
+                        button.click(update_selection, inputs=input_section, outputs=output)
+
+                    with gr.Column():
+                        gr.Markdown("### Delete an option:")
+                        delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
+                        delete_button = gr.Button("Delete from List")
+                        delete_button.click(delete_selection, inputs=delete_input, outputs=output)
+                    '''
+                gr.Markdown("### Upload a JSON File")
+                with gr.Row():
+                    ### workflow
+                        
+                    
+                
+                    # 上传组件
+                    file_input = gr.File(label="Upload JSON File", file_types=[".json"])
+                    
+                    # 输出组件
+                    json_output = gr.JSON(label="File Content (Loaded in Memory)")
+                    
+                    # 绑定上传文件和显示内容的逻辑
+                    file_input.change(upload_json, inputs=file_input, outputs=json_output)
                     
 
-                sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True)
+                    main_options = extract_keys(json_data)
 
-                rename = gr.Textbox(label="Optional: give the input a name", interactive=True)
+                gr.Markdown("### Choose your inputs")
+                with gr.Row():
+                    
                 
-            # 按钮
-            submit_button = gr.Button("Submit")
-                
+                    # 主选单
+                        # 主菜单（动态更新）
+                    main_menu = gr.Dropdown(label="Node Id and name", choices=[], interactive=True)
+                    
+                    # 次级菜单（动态更新）
+                    sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
+                        
 
-            # 输出区域
-            output_workflow = gr.Textbox(label="Result", interactive=False)
+                    sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True)
 
-            # 当主选单改变时，动态更新次级选单
-            main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
-
-            # 提交按钮处理最终结果
-            submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu, rename], outputs=output_workflow)
-            # 删除按钮
-            delete_button = gr.Button("Delete Last Line")
-            
-            # 按下按钮后删除最后一行
-            delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
-
-
-
-            # 上传文件后更新主菜单
-            file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
-            #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
-            file_input.change(clear_cache, inputs=[], outputs=output_workflow)
-            #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
-
-            final_output = gr.Textbox(label="Output", interactive=False)
-            generate_button = gr.Button("Generate predict.py")
-            # 定义按钮点击行为
-            generate_button.click(
-                generate_predict_file,
-                inputs=[dir_comfyui, port_comfyui, output_workflow, os_system],
-                outputs=final_output
-            )
-
-        with gr.Tab("Edit Inputs"):
-            gr.Markdown("# Edit your UI" )
-            gr.Markdown("## Upload your predict.py (If you just used predict.py generator, predict.py locate in your ivry root folder)")
-            # 上传组件
-            python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
-            
-            # 输出组件
-            python_output = gr.JSON(label="File Content (Loaded in Memory)")
-            # 绑定上传文件和显示内容的逻辑
-            python_input.change(upload_python, inputs=python_input, outputs=python_output)
-            with gr.Row():
-                
-            
-                # 主选单
-                    # 主菜单（动态更新）
-                element_name = gr.Dropdown(label="element name", choices=[], interactive=True)
-                
-                # 次级菜单（动态更新）
-                component_type = gr.Dropdown(label="component type", choices=[], interactive=True)
-
-            # 上传文件后更新主菜单
-            with gr.Row():
+                    rename = gr.Textbox(label="Optional: give the input a name", interactive=True)
+                    
+                # 按钮
                 submit_button = gr.Button("Submit")
+                    
+
+                # 输出区域
+                output_workflow = gr.Textbox(label="Result", interactive=False)
+
+                # 当主选单改变时，动态更新次级选单
+                main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
+
+                # 提交按钮处理最终结果
+                submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu, rename], outputs=output_workflow)
                 # 删除按钮
-                delete_button = gr.Button("Delete Last component")
-            predict_signature_output = gr.Textbox(label="Result", interactive=True,max_lines=30)
-            # 按下按钮后删除最后一行
-            submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
-            delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
+                delete_button = gr.Button("Delete Last Line")
+                
+                # 按下按钮后删除最后一行
+                delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
+
+
+
+                # 上传文件后更新主菜单
+                file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
+                #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+                file_input.change(clear_cache, inputs=[], outputs=output_workflow)
+                #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
+
+
+                final_output = gr.Textbox(label="Output", interactive=False)
+                generate_button = gr.Button("Generate predict.py")
+                # 定义按钮点击行为
+                generate_button.click(
+                    generate_predict_file,
+                    inputs=[dir_comfyui, port_comfyui, output_workflow, os_system],
+                    outputs=final_output
+                )
+
+            with gr.Tab("Edit Inputs"):
+                gr.Markdown("# Edit your UI" )
+                gr.Markdown("## Upload your predict.py (If you just used predict.py generator, predict.py locate in your ivry root folder)")
+                # 上传组件
+                python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
+                
+                # 输出组件
+                python_output = gr.JSON(label="File Content (Loaded in Memory)")
+                # 绑定上传文件和显示内容的逻辑
+                python_input.change(upload_python, inputs=python_input, outputs=python_output)
+                with gr.Row():
+                    
+                
+                    # 主选单
+                        # 主菜单（动态更新）
+                    element_name = gr.Dropdown(label="element name", choices=[], interactive=True)
+                    
+                    # 次级菜单（动态更新）
+                    component_type = gr.Dropdown(label="component type", choices=[], interactive=True)
+
+                # 上传文件后更新主菜单
+                with gr.Row():
+                    submit_button = gr.Button("Submit")
+                    # 删除按钮
+                    delete_button = gr.Button("Delete Last component")
+                predict_signature_output = gr.Textbox(label="Result", interactive=True,max_lines=30)
+                # 按下按钮后删除最后一行
+                submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
+                delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
 
 
 
 
 
+                
+                element_name.change(update_component_type, inputs=element_name, outputs=component_type)
+                python_input.change(upload_python_signature, inputs=python_input, outputs=element_name)
+                #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
+                python_input.change(clear_cache, inputs=[], outputs=output_workflow)
+                #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
+
+                signature_final_output = gr.Textbox(label="signature Output", interactive=False)
+                with gr.Row():
+                    preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="enter your project name")
+                    signature_generate_button = gr.Button("Generate predict_signature.json")
+                # 定义按钮点击行为
+                signature_generate_button.click(
+                    generate_signature_file,
+                    inputs=[preoject_siginature_name,predict_signature_output],
+                    outputs=signature_final_output
+                )
+
+            with gr.Tab("upload and host app"):
+                gr.Markdown("## Step 4: upload your app, enter your project name")
+                # 输入组件
+                upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="enter your project name")
+                
+                # 输出组件
+                upload_output_text = gr.Textbox(label="upload result")
+                
+                # 按钮触发
+                login_button = gr.Button("upload")
+                login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
+
+                gr.Markdown("### Subprocess Runner")
+
+
+                project_x_path_input = gr.Textbox(label="Target Path for ivry_cli")
+
+                with gr.Row():
+                    gr.Markdown("#### ivry_cli")
+                    start_project_x_button = gr.Button("Start ivry_cli")
+                    project_x_status = gr.Textbox(label="ivry_cli Status", interactive=False)
+
+
+                with gr.Row():
+                    gr.Markdown("#### Stop Processes")
+                    stop_processes_button = gr.Button("Stop All Processes")
+                    stop_processes_status = gr.Textbox(label="Stop Processes Status", interactive=False)
+
+                log_output = gr.Textbox(label="Logs", lines=20, interactive=False)
+                refresh_button = gr.Button("Refresh Logs")
+                refresh_button.click(refresh_logs, inputs=project_x_path_input ,outputs=log_output)
             
-            element_name.change(update_component_type, inputs=element_name, outputs=component_type)
-            python_input.change(upload_python_signature, inputs=python_input, outputs=element_name)
-            #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
-            python_input.change(clear_cache, inputs=[], outputs=output_workflow)
-            #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
-            signature_final_output = gr.Textbox(label="signature Output", interactive=False)
-            with gr.Row():
-                preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="enter your project name")
-                signature_generate_button = gr.Button("Generate predict_signature.json")
-            # 定义按钮点击行为
-            signature_generate_button.click(
-                generate_signature_file,
-                inputs=[preoject_siginature_name,predict_signature_output],
-                outputs=signature_final_output
-            )
-
-        with gr.Tab("upload and host app"):
-            gr.Markdown("## Step 4: upload your app, enter your project name")
-            # 输入组件
-            upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="enter your project name")
             
-            # 输出组件
-            upload_output_text = gr.Textbox(label="upload result")
-            
-            # 按钮触发
-            login_button = gr.Button("upload")
-            login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
-
-            gr.Markdown("### Subprocess Runner")
+                # 按钮交互逻辑
+                #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
+                start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
+                stop_processes_button.click(stop_processes, outputs=stop_processes_status)
 
 
-            project_x_path_input = gr.Textbox(label="Target Path for Project-X")
+                # input textbox syncup
+                project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=upload_name_input)
+                project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
+                project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=preoject_siginature_name)
+                                                                                        
 
-            with gr.Row():
-                gr.Markdown("#### Project-X")
-                start_project_x_button = gr.Button("Start Project-X")
-                project_x_status = gr.Textbox(label="Project-X Status", interactive=False)
+                upload_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
 
+    demo.launch()
 
-            with gr.Row():
-                gr.Markdown("#### Stop Processes")
-                stop_processes_button = gr.Button("Stop All Processes")
-                stop_processes_status = gr.Textbox(label="Stop Processes Status", interactive=False)
-
-            log_output = gr.Textbox(label="Logs", lines=20, interactive=False)
-            refresh_button = gr.Button("Refresh Logs")
-            refresh_button.click(refresh_logs, inputs=project_x_path_input ,outputs=log_output)
-        
-        
-            # 按钮交互逻辑
-            #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
-            start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
-            stop_processes_button.click(stop_processes, outputs=stop_processes_status)
-
-
-            # input textbox syncup
-            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=upload_name_input)
-            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
-            project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=preoject_siginature_name)
-                                                                                    
-
-            upload_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
-
-demo.launch()
+if __name__ == "__main__":
+    main()
