@@ -72,7 +72,7 @@ def put_file_to_signed_endpoint(
     # otherwise fallback to the URL of the final request.
     final_url = resp.url
     if "location" in resp.headers:
-        final_url = urlparse(final_url)._replace(path="").geturl() + resp.headers.get("location")
+        final_url = resp.headers.get("location")
 
     # strip any signing gubbins from the URL
     return str(urlparse(final_url)._replace(query="").geturl())
