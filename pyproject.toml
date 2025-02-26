@@ -21,7 +21,8 @@ dependencies = [
   "typing_extensions>=4.4.0",
   "uvicorn[standard]>=0.12,<1",
   "pillow",
-  "fire"
+  "fire",
+  "psutil>=5.8,<6"  # 添加 psutil，确保兼容较新版本
 ]
 
 [tool.setuptools]

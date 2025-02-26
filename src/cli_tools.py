@@ -10,7 +10,7 @@ from communicate import upload_config
 import requests
 import json
 import shutil
-from util import get_apikey
+from util import get_apikey, find_comfyui_processes, get_comfyui_install_path, get_comfyui_ports
 import subprocess
 import signal
 
@@ -172,7 +172,6 @@ class Cli:
         terminate_process("cloudflared tunnel --config tunnel_config.json run")
         
         print("All server processes have been stopped.")
-    
 
 
 
@@ -234,6 +233,19 @@ class Cli:
     def upload_config(self):
         upload_config()
         return f"Config Uploaded."
+
+    def find_comfyUI(self):
+        proc = find_comfyui_processes()
+        if not proc:
+            print("didn't detect ComfyUI process")
+        else:
+            pid = proc.pid
+            name = proc.info.get('name') or ''
+            port = get_comfyui_ports(proc)
+            path = get_comfyui_install_path(proc)
+            print(f"detected ComfyUI process: PID={pid}, name={name}")
+            print(f"  comfyUI install path: {path if path else 'nothing detected'}")
+            print(f"  listning port: {port if port else 'nothing detected'}")
 
 
 def main():
