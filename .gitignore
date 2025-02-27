@@ -40,10 +40,10 @@ gradio_predict.py
 /windows
 /myenv
 /comfyui_workflows
-predict.py
 predict_signature.json
 /win10
 /bug_test
 /ui_test
 /cat_girl
 /226test
+/predict.py

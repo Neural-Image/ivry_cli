@@ -37,7 +37,10 @@ class Predictor(BasePredictor):
     """
     def predict(self,
                 prompt: str= Input(description=''),
-                neg_prompt: str= Input(description=''),
+                prompt1: str= Input(description=''),
+                prompt2: str= Input(description=''),
+                prompt3: str= Input(description=''),
+                prompt4: float= Input(description=''),
                 
     ) -> Path:
         client_id = str(uuid.uuid4())
@@ -53,7 +56,10 @@ class Predictor(BasePredictor):
         In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
         '''
         prompt_config['7']['inputs']['text'] = prompt
-        prompt_config['6']['inputs']['text'] = neg_prompt
+        prompt_config['3']['inputs']['negative'] = prompt1
+        prompt_config['3']['inputs']['positive'] = prompt2
+        prompt_config['3']['inputs']['sampler_name'] = prompt3
+        prompt_config['3']['inputs']['steps'] = prompt4
         
 
         '''

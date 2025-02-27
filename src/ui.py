@@ -4,34 +4,106 @@ import ast
 import json
 import copy
 import os
-from pathlib import Path
 import signal
-from parse_InOut import parse_predict_return
 import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple, Union
+from parse_InOut import parse_predict_return
 
-json_data = {}
-json_name = ""
-final_selection = []
-inputs_counter = {
-    "int":0, 
-    "float":0, 
-    "str":0, 
-    "Path":0 ,
-    "bool":0
+# 全局变量
+class State:
+    def __init__(self):
+        self.json_data = {}
+        self.json_name = ""
+        self.final_selection = []
+        self.inputs_counter = {"int": 0, "float": 0, "str": 0, "Path": 0, "bool": 0}
+        self.workflow_parsing = ""
+        self.final_inputs = []
+        self.input_dict = {}
+        self.input_type = {}
+        self.workflow_json = ""
+        self.python_dict_inputs = {}
+        self.signature = ''
+        self.input_names = []
+        self.signature_list = []
+        self.project_x_process = None
+        self.cloudflare_process = None
+
+# 全局状态实例
+state = State()
+
+# 常量
+LOG_FILE = "client.log"
+MAX_LOG_SIZE = 5 * 1024 * 1024  # 5MB
+IVRY_URL = "https://www.ivry.co/"
+COMPONENT_TEMPLATES = {
+    "slider": '''{{
+            "component_type": "slider",
+            "title": "{element_name}",
+            "description": "",
+            "defaultvalue":"" ,
+            "min":0 ,
+            "max":10
+        }},
+        ''',
+    "input": '''{{
+            "component_type": "input",
+            "title": "{element_name}",
+            "description": "",
+            "defaultvalue": "hello world",
+            "placeholder": "type prompt here"
+        }},
+        ''',
+    "multi-select": '''{{
+            "component_type": "multi-select",
+            "title": "{element_name}",
+            "description": "",
+            "defaultvalue": [],
+            "options": [
+            {{ name: "Startup", ram: "12GB", cpus: "6 CPUs", disk: "256GB SSD disk" }},
+            {{ name: "Business", ram: "16GB", cpus: "8 CPUs", disk: "512GB SSD disk" }},
+            ]
+        }},
+        ''',
+    "checkbox": '''{{
+            "component_type": "checkbox",
+            "title": "{element_name}",
+            "description": "",
+            "defaultvalue": "true"
+        }},
+        ''',
+    "single-select": '''{{
+            "component_type": "single-select",
+            "title": "{element_name}",
+            "description": "",
+            "defaultvalue": "",
+            "options": [
+                "Tom Cook",
+                "Wade Cooper",
+                "Tanya Fox",
+                "Arlene Mccoy",
+                "Devon Webb"
+                ]
+        }},
+        ''',
+    "textarea": '''{{
+            "component_type": "textarea",
+            "title": "{element_name}",
+            "description": "",
+            "placeholder": "type what you want here",
+            "defaultvalue": ""
+        }},
+        ''',
+    "file-upload": '''{{
+            "component_type": "file-upload",
+            "title": "{element_name}",
+            "description": ""
+        }},
+        '''
 }
-workflow_parsing = ""
-final_inputs = []
-input_dict = {}
-input_type = {}
-workflow_json = ""
-python_dict_inputs = {}
-signature = ''
-input_names = []
-project_x_process = None
-cloudflare_process = None
-signature_list = []
 
-def validate_signature_data(signature_data):
+def validate_signature_data(signature_data: List[Dict[str, Any]]) -> Optional[str]:
+    """验证签名数据的有效性"""
     for item in signature_data:
         component_type = item.get("component_type")
         if component_type == "slider":
@@ -50,976 +122,855 @@ def validate_signature_data(signature_data):
         elif component_type == "file-upload":
             if "description" not in item:
                 return f"Error: Missing description for file-upload '{item.get('title')}'"
-        # Add more checks for other types if necessary
     return None
 
 
-def generate_signature_file(project_name, signature_text):
-    #try:
-        if project_name == '':
-            raise ValueError("Pleas enter your project name")
-        if not os.path.isdir(project_name):
-            raise ValueError("Pleas init your project first")
-        #prefix = "{\n   const config = [\n"
-        prefix = "[\n"
-        suffix = "\n]"
-        #signature_text = "\n".join([line for line in signature_text.splitlines() if line.strip()])
-        #signature_text = re.sub(r",\s*([}\]])\s*\Z", r"\1", signature_text, flags=re.MULTILINE)
-        
-        signature_text = signature_text.rstrip()
-        if signature_text.endswith(","):
-            signature_text = signature_text[:-1]
-        
-        signature_text = prefix + signature_text + suffix
-        print(signature_text)
+def generate_signature_file(project_name: str, signature_text: str) -> str:
+    """生成签名文件"""
+    if not project_name:
+        return "Error: Please enter your project name"
+    
+    if not os.path.isdir(project_name):
+        return "Error: Please init your project first"
+    
+    prefix = "[\n"
+    suffix = "\n]"
+    
+    # 移除尾部的逗号
+    signature_text = signature_text.rstrip()
+    if signature_text.endswith(","):
+        signature_text = signature_text[:-1]
+    
+    # 格式化最终的JSON
+    signature_text = prefix + signature_text + suffix
+    
+    try:
         signature_json_data = json.loads(signature_text)
         validation_error = validate_signature_data(signature_json_data)
         if validation_error:
             return validation_error
         
-        
-        with open("./" + project_name + '/predict_signature.json', 'w') as file:
+        output_path = os.path.join(project_name, 'predict_signature.json')
+        with open(output_path, 'w') as file:
             json.dump(signature_json_data, file, indent=4, ensure_ascii=False)
         
-        return project_name +"/predict_signature.json generated successfully!"
-    # except Exception as e:
-    #     return "", f"error meesage: {str(e)}"
+        return f"{output_path} generated successfully!"
+    except json.JSONDecodeError as e:
+        return f"Error: Invalid JSON format - {str(e)}"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
-def get_wsl_distro_name():
-    result = subprocess.run(
-        ["bash", "-c", "echo $WSL_DISTRO_NAME"],  
-        stdout=subprocess.PIPE,                   
-        stderr=subprocess.PIPE,                   
-        text=True                                 
-    )
-    # 去除输出中的换行符并返回
-    return result.stdout.strip()
+def get_wsl_distro_name() -> str:
+    """获取WSL发行版名称"""
+    try:
+        result = subprocess.run(
+            ["bash", "-c", "echo $WSL_DISTRO_NAME"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5
+        )
+        return result.stdout.strip()
+    except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+        return "Ubuntu"  # Default to Ubuntu if failed
 
 
-def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
-    print("input_section",input_section)
+def win_path_to_wsl_path(win_path: str) -> str:
+    """将Windows路径转换为WSL路径"""
+    if not win_path:
+        return ""
     
-    wsl_name = "Ubuntu"
-    if os_system == '':
-        #raise ValueError("Please select your os system")
-        return "Error: Please select your os system"
+    # 统一将反斜杠替换为正斜杠
+    path_unix = win_path.replace("\\", "/")
+    
+    # 如果路径形如 "C:/..."，那么把它转为 "/mnt/c/..."
+    if len(path_unix) >= 2 and path_unix[1] == ':':
+        drive_letter = path_unix[0].lower()
+        path_unix = "/mnt/" + drive_letter + path_unix[2:]
+    
+    return path_unix
 
-    if dir_comfyui == '':
-        #raise ValueError("Please enter your comfyUI dir")
+
+def get_local_ip(port: Union[str, int]) -> str:
+    """获取本地IP地址和端口"""
+    try:
+        result = subprocess.check_output(
+            "ip route | grep default | awk '{print $3}'", 
+            shell=True, 
+            text=True,
+            timeout=5
+        ).strip()
+        return f"{result}:{port}"
+    except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+        return f"127.0.0.1:{port}"
+
+
+def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: str, os_system: str) -> str:
+    """生成predict.py文件"""
+    if not os_system:
+        return "Error: Please select your os system"
+    
+    if not dir_comfyui:
         return "Error: Please enter your comfyUI dir"
     
-    if os_system == "windows":
-        port_comfyui = get_local_ip(port_comfyui)
-        print("port_comfyui", port_comfyui)
-        dir_comfyui = win_path_to_wsl_path(dir_comfyui)
-        wsl_name = get_wsl_distro_name()
-    else:
-        port_comfyui = "127.0.0.1:" + str(port_comfyui)
-
- 
-    os.makedirs("comfyui_workflows", exist_ok=True)
-    if json_data == "" or json_data == "{}":
-        raise ValueError("Please upload correct api json")
-    with open("comfyui_workflows/" + json_name, "w") as output_file:
-        json.dump(json_data, output_file, indent=4)
-
-    cur_input_dict = copy.deepcopy(input_dict)
-    cur_input_type = copy.deepcopy(input_type)
-
-    # 读取模板文件内容
-    input_parameter = ""
-    with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
-        content = template_file.read()
-    # print(input_section)
-    
-    
-    input_section = input_section.split(',')
-
-    for index, i in enumerate(input_section):
-        if "\n" in i:
-            input_section[index] = i.split("\n")[1]
-        if i == '':
-            input_section.pop(index)
-        if "Input(description='" not in i:
-            input_section.pop(index)
-
-    # ### Inputs 
-
-
-    for index, i in enumerate(input_section):
-        if input_names[index] == "":
-            input_parameter = input_parameter + 'ivry_' + i + ",\n                "
-        else:
-            tmp = i.replace(i.split(':')[0], input_names[index], 1)
-            input_parameter = input_parameter + tmp + ",\n                "
-
-    
-
-
-    ### workflow json
-
-    logic_section = ""
-    for index, i in enumerate(input_section):
-        #print("input_section",input_section)
+    try:
+        wsl_name = "Ubuntu"
+        port_str = port_comfyui
         
-        tmp_node_id = i.split('_')[0]
-        tmp_node_typr = cur_input_type[tmp_node_id][0]
-        tmp_node_input = cur_input_dict[tmp_node_id][0]
-        # print("tmp_node_id",tmp_node_id)
-        # print("tmp_node_typr",tmp_node_typr)
-        # print("tmp_node_input",tmp_node_input)
-        # print("input_names",input_names)
-
-        if tmp_node_typr == 'Path':
-            if os_system != "windows":
-                if input_names[index] == "":
-                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str(ivry_{tmp_node_id}_{tmp_node_input})" +  "\n        "
-                else:
-                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = str({input_names[index]})" +  "\n        "
-            else:
-                if input_names[index] == "":
-                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str(ivry_{tmp_node_id}_{tmp_node_input})[5:]" +  "\n        "
-                else:
-                    logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = " + "r'" + f"\\\\wsl$\\{wsl_name}\\tmp'" + "+ '/' +"  + f"str({input_names[index]})[5:]" +  "\n        "
+        if os_system == "windows":
+            port_str = get_local_ip(port_comfyui)
+            dir_comfyui = win_path_to_wsl_path(dir_comfyui)
+            wsl_name = get_wsl_distro_name()
         else:
-            if input_names[index] == "":
-                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = ivry_{tmp_node_id}_{tmp_node_input}" +  "\n        "
+            port_str = f"127.0.0.1:{port_comfyui}"
+        
+        # 确保工作流目录存在
+        os.makedirs("comfyui_workflows", exist_ok=True)
+        
+        if not state.json_data:
+            return "Error: Please upload correct API JSON"
+            
+        # 保存工作流
+        with open(f"comfyui_workflows/{state.json_name}", "w") as output_file:
+            json.dump(state.json_data, output_file, indent=4)
+        
+        # 读取模板并处理输入部分
+        with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
+            content = template_file.read()
+        
+        # 处理输入部分
+        input_sections = [s for s in input_section.split(',') if s.strip()]
+        processed_sections = []
+        
+        for i, section in enumerate(input_sections):
+            if "\n" in section:
+                section = section.split("\n")[1]
+            
+            if "Input(description='" not in section:
+                continue
+                
+            if not state.input_names[i]:
+                processed_sections.append(f'ivry_{section},\n                ')
             else:
-                logic_section += f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = {input_names[index]}" +  "\n        "
+                tmp = section.replace(section.split(':')[0], state.input_names[i], 1)
+                processed_sections.append(f'{tmp},\n                ')
+        
+        input_parameter = "".join(processed_sections)
+        
+        # 处理逻辑部分
+        logic_sections = []
+        cur_input_dict = copy.deepcopy(state.input_dict)
+        cur_input_type = copy.deepcopy(state.input_type)
+        
+        for i, section in enumerate(input_sections):
+            if "\n" in section:
+                section = section.split("\n")[1]
+                
+            if "Input(description='" not in section:
+                continue
+                
+            tmp_node_id = section.split('_')[0]
+            
+            if tmp_node_id not in cur_input_dict or tmp_node_id not in cur_input_type:
+                continue
+                
+            tmp_node_type = cur_input_type[tmp_node_id][0]
+            tmp_node_input = cur_input_dict[tmp_node_id][0]
+            
+            # 根据不同OS和类型处理路径
+            if tmp_node_type == 'Path':
+                if os_system != "windows":
+                    if not state.input_names[i]:
+                        logic_sections.append(
+                            f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = "
+                            f"str(ivry_{tmp_node_id}_{tmp_node_input})\n        "
+                        )
+                    else:
+                        logic_sections.append(
+                            f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = "
+                            f"str({state.input_names[i]})\n        "
+                        )
+                else:
+                    wsl_path = r"\\wsl$\\" + wsl_name + r"\tmp"
+                    if not state.input_names[i]:
+                        logic_sections.append(
+                            f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = r'{wsl_path}'"
+                            f" + '/' + str(ivry_{tmp_node_id}_{tmp_node_input})[5:]\n        "
+                        )
+                    else:
+                        logic_sections.append(
+                            f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = r'{wsl_path}'"
+                            f" + '/' + str({state.input_names[i]})[5:]\n        "
+                        )
+            else:
+                if not state.input_names[i]:
+                    logic_sections.append(
+                        f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = "
+                        f"ivry_{tmp_node_id}_{tmp_node_input}\n        "
+                    )
+                else:
+                    logic_sections.append(
+                        f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = "
+                        f"{state.input_names[i]}\n        "
+                    )
+            
+            # 处理完一个输入后，移除它以处理下一个
+            if len(cur_input_dict[tmp_node_id]) > 1:
+                cur_input_dict[tmp_node_id].pop(0)
+                cur_input_type[tmp_node_id].pop(0)
+        
+        logic_section = "".join(logic_sections)
+        
+        # 获取工作流文件的绝对路径
+        workflow_path = Path(f"comfyui_workflows/{state.json_name}").resolve()
+        
+        # 替换模板中的占位符
+        content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
+        content = content.replace("{{port_comfyui}}", f"'{port_str}'")
+        content = content.replace("{{input_section}}", input_parameter)
+        content = content.replace("{{workflow_dir}}", f"r'{workflow_path}'")
+        content = content.replace("{{logic_section}}", logic_section)
+        
+        # 保存为 predict.py
+        with open("predict.py", "w") as predict_file:
+            predict_file.write(content)
+            
+        return "predict.py generated successfully!"
+    except Exception as e:
+        return f"Error generating predict.py: {str(e)}"
 
-        if len(cur_input_dict[tmp_node_id]) > 1:
-            cur_input_dict[tmp_node_id].pop(0)
-            cur_input_type[tmp_node_id].pop(0)
 
-    
-    folder = Path("comfyui_workflows/" + json_name)  # 文件夹的相对路径
-    absolute_path = folder.resolve()  # 获取绝对路径
-    
-    # 替换模板中的占位符
-    content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
-    content = content.replace("{{port_comfyui}}", f"'{port_comfyui}'")
-    content = content.replace("{{input_section}}", input_parameter)
-    content = content.replace("{{workflow_dir}}", f"r'{absolute_path}'")
-    content = content.replace("{{logic_section}}", logic_section)
-
-    # 保存为 predict.py
-    with open("predict.py", "w") as predict_file:
-        predict_file.write(content)
-
-    return "predict.py generated successfully!"
-
-def update_selection(selection):
-    global inputs_counter
-    final_selection.append(selection + "_" + str(inputs_counter[selection]))
-    inputs_counter[selection] += 1
-    return final_selection  # 返回更新后的列表
-
-def delete_selection(option_to_delete):
-    global inputs_counter
-    if (option_to_delete + "_" + str(inputs_counter[option_to_delete] - 1)) in final_selection:
-        final_selection.remove(option_to_delete + "_" + str(inputs_counter[option_to_delete] - 1))
-        inputs_counter[option_to_delete] -= 1
-    return final_selection  # 返回更新后的列表
-
-
-
-# 处理最终选择后的输出
-def process_selection(main_selection, sub_selection, sub_sub_selection, rename):
-    global workflow_parsing
-    global final_inputs
-    global input_dict
-    global input_type
-    global input_names
-    if rename == "":
+def process_selection(main_selection: str, sub_selection: str, sub_sub_selection: str, rename: str) -> str:
+    """处理用户选择并更新工作流解析结果"""
+    if not rename:
         rename = sub_selection
+        
+    # 验证重命名
     if " " in rename:
         return "Please use underscore instead of space"
-    if rename in input_names:
+        
+    if rename in state.input_names:
         return "This name is already taken. Please give another name."
+        
     if any(char in "!@#$%^&*-+=<>?/.,;:'\"[]{}\\|`~" for char in rename):
         return "Please use letters or numbers."
-    if not rename[0].isalpha():  # 检查第一个字符是否是字母
-        return "Firts letter must be alphabeta"
+        
+    if not rename[0].isalpha():
+        return "First letter must be alphabeta"
     
-    if (main_selection.split(' ')[0] + sub_selection) not in final_inputs:
-        if main_selection.split(' ')[0] not in input_dict:
-            input_dict[main_selection.split(' ')[0]] = [sub_selection]
+    node_id = main_selection.split(' ')[0]
+    full_id = node_id + sub_selection
+    
+    if full_id not in state.final_inputs:
+        # 添加到输入字典
+        if node_id not in state.input_dict:
+            state.input_dict[node_id] = [sub_selection]
         else:
-            input_dict[main_selection.split(' ')[0]].append(sub_selection)
+            state.input_dict[node_id].append(sub_selection)
         
-        if main_selection.split(' ')[0] not in input_type:
-            input_type[main_selection.split(' ')[0]] = [sub_sub_selection]
+        # 添加到类型字典
+        if node_id not in state.input_type:
+            state.input_type[node_id] = [sub_sub_selection]
         else:
-            input_type[main_selection.split(' ')[0]].append(sub_sub_selection)
+            state.input_type[node_id].append(sub_sub_selection)
         
-        input_names.append(rename)
-        final_inputs.append(main_selection.split(' ')[0] + sub_selection)
-        if len(final_inputs) == 1:
-            workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + f"= Input(description=''),-------->{rename}<--------"
+        # 添加重命名
+        state.input_names.append(rename)
+        state.final_inputs.append(full_id)
+        
+        # 格式化显示
+        entry = f"{node_id}_{sub_selection}: {sub_sub_selection}= Input(description=''),-------->{rename}<--------"
+        if state.workflow_parsing:
+            state.workflow_parsing += f"\n{entry}"
         else:
-            workflow_parsing += "\n" + main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + f"= Input(description=''),-------->{rename}<--------"
+            state.workflow_parsing = entry
     else:
         return "This key pairs already in predict.py, if you want to change it, please delete it with delete button first"
+    
+    return state.workflow_parsing
 
-    return workflow_parsing
 
-# 处理上传的 JSON 文件并将其保存到内存
-def upload_json(file):
-    if file is not None:
-        # 读取 JSON 文件
+def upload_json(file) -> Union[Dict, str]:
+    """上传并解析JSON文件"""
+    if file is None:
+        return "No file uploaded!"
+        
+    try:
         with open(file.name, "r") as f:
-            json_data = json.load(f)
-        # 返回文件内容作为内存中的数据
-        return json_data  # 可以将数据存入全局变量或返回显示在界面上
-    return "No file uploaded!"
+            return json.load(f)
+    except json.JSONDecodeError:
+        return "Invalid JSON file!"
+    except Exception as e:
+        return f"Error loading file: {str(e)}"
 
-# 递归提取 JSON 中所有键，返回列表
-def extract_keys(data):
+
+def extract_keys(data: Dict) -> List[str]:
+    """从JSON数据中提取键"""
     keys = []
-    if isinstance(data, dict):  # 如果是字典
+    if isinstance(data, dict):
         for key, value in data.items():
             if "inputs" in data[key]:
-                if "_meta" in data[key]:
-                    if "title" in data[key]["_meta"]:
-                        keys.append(key + " - " + data[key]["_meta"]["title"])
+                if "_meta" in data[key] and "title" in data[key]["_meta"]:
+                    keys.append(f"{key} - {data[key]['_meta']['title']}")
                 else:
-                     keys.append(key)
-
+                    keys.append(key)
     return keys
 
-# 上传 JSON 文件并更新主菜单
-def upload_json_and_update_menu(file):
-    global json_data
-    global json_name
-    if file is not None:
+
+def upload_json_and_update_menu(file) -> gr.update:
+    """上传JSON文件并更新菜单选项"""
+    if file is None:
+        return gr.update(choices=[], value=None)
+    
+    try:
         with open(file.name, "r") as f:
-            json_data = json.load(f)
-        json_name = os.path.basename(file.name) 
+            state.json_data = json.load(f)
+        
+        state.json_name = os.path.basename(file.name)
+        keys = extract_keys(state.json_data)
+        
+        if not keys:
+            return gr.update(choices=[], value=None)
+            
+        return gr.update(choices=keys, value=keys[0])
+    except Exception:
+        return gr.update(choices=[], value=None)
 
-        keys = extract_keys(json_data)  # 提取所有键
-        unique_keys = list(set(keys))  # 去重
-        return gr.update(choices=unique_keys, value=unique_keys[0])  # 更新 Dropdown 的选项
-    return gr.update(choices=[], value=None)
 
-# 提取 JSON 中所有 keys 的函数（针对 inputs）
-def extract_input_keys(data, key):
-    # 检查是否存在指定的 key，并且有 "inputs"
+def extract_input_keys(data: Dict, key: str) -> List[str]:
+    """提取指定键的输入键"""
     if key in data and "inputs" in data[key]:
-        return list(data[key]["inputs"].keys())  # 返回 inputs 中的所有键
+        return list(data[key]["inputs"].keys())
     return []
 
-# 根据主菜单选择更新次级菜单
-def update_submenu(main_key):
-    if main_key.split(' ')[0] in json_data:
-        input_keys = extract_input_keys(json_data, main_key.split(' ')[0])
+
+def update_submenu(main_key: str) -> gr.update:
+    """根据主菜单选择更新子菜单"""
+    node_id = main_key.split(' ')[0]
+    if node_id in state.json_data:
+        input_keys = extract_input_keys(state.json_data, node_id)
         return gr.update(choices=input_keys, value=input_keys[0] if input_keys else None)
     return gr.update(choices=[], value=None)
 
 
-# 根据主菜单选择更新次级菜单
-def update_subsubmenu(outputs):
-    outputs = ast.literal_eval(outputs)
-    return gr.update(choices=outputs, value=outputs[0] if outputs else None)
+def update_subsubmenu(outputs: str) -> gr.update:
+    """更新子子菜单"""
+    try:
+        outputs_list = ast.literal_eval(outputs)
+        return gr.update(choices=outputs_list, value=outputs_list[0] if outputs_list else None)
+    except (SyntaxError, ValueError):
+        return gr.update(choices=[], value=None)
 
 
-# 定义清理逻辑
 def clear_cache():
-    global json_data
-    global final_selection
-    global inputs_counter
-    global workflow_parsing
-    global final_inputs
-    global input_dict
-    global input_type
-    global rename
-    global json_name
-    global workflow_json
-    global python_dict_inputs
-    global signature
-    global input_names
-    global signature_list
-
-    signature_list = []
-    json_name = ""
-    workflow_json = ""
-    python_dict_inputs = {}
-    signature = ''
-    json_data = {}
-    final_selection = []
-    inputs_counter = {
-        "int":0, 
-        "float":0, 
-        "str":0, 
-        "Path":0 ,
-        "bool":0
-    }
-    workflow_parsing = ""
-    final_inputs = []
-    input_dict = {}
-    input_names = []
-    input_type = {}
-    return None  
+    """清除所有全局状态"""
+    state.__init__()  # 重置所有状态
+    return None
 
 
-# 定义函数，删除文本框中的最后一行
-def delete_last_line(text):
-    global workflow_parsing
-    global final_inputs
-    global input_dict
-    global input_type
-    global input_names
+def delete_last_line(text: str) -> str:
+    """删除文本的最后一行"""
+    if not text.strip():
+        return text
     
-    if text.strip():  # 检查文本框是否为空
-        workflow_lines = workflow_parsing.split("\n")
-        if workflow_lines[-1].split('_')[0] + input_dict[workflow_lines[-1].split('_')[0]][-1] in final_inputs:
-            final_inputs.remove(workflow_lines[-1].split('_')[0]+ input_dict[workflow_lines[-1].split('_')[0]][-1])
-
-            if len(input_dict[workflow_lines[-1].split('_')[0]]) < 2:
-                del input_dict[workflow_lines[-1].split('_')[0]]
-            else:
-                input_dict[workflow_lines[-1].split('_')[0]].pop()
+    workflow_lines = state.workflow_parsing.split("\n")
+    
+    if workflow_lines:
+        last_line = workflow_lines[-1]
+        node_id = last_line.split('_')[0]
+        
+        if node_id in state.input_dict:
+            full_id = node_id + state.input_dict[node_id][-1]
             
-            if len(input_type[workflow_lines[-1].split('_')[0]]) < 2:
-                del input_type[workflow_lines[-1].split('_')[0]]
-            else:
-                input_type[workflow_lines[-1].split('_')[0]].pop()
-            input_names.pop()
+            if full_id in state.final_inputs:
+                state.final_inputs.remove(full_id)
+                
+                if len(state.input_dict[node_id]) < 2:
+                    del state.input_dict[node_id]
+                else:
+                    state.input_dict[node_id].pop()
+                
+                if node_id in state.input_type and len(state.input_type[node_id]) < 2:
+                    del state.input_type[node_id]
+                elif node_id in state.input_type:
+                    state.input_type[node_id].pop()
+                
+                if state.input_names:
+                    state.input_names.pop()
+        
         workflow_lines.pop()
+        state.workflow_parsing = "\n".join(workflow_lines)
         
-        workflow_parsing = "\n".join(workflow_lines)
         lines = text.split("\n")
-        lines.pop()  # 删除最后一行
+        if lines:
+            lines.pop()
         return "\n".join(lines)
-    return text  # 如果文本框为空，保持原样
+        
+    return text
 
 
-def run_login(api_key):
+def run_command(command: str, timeout: int = 30) -> str:
+    """运行命令并返回结果"""
     try:
-        # 构造命令
-        command = f"ivry_cli login {api_key}"
+        result = subprocess.run(
+            command, 
+            shell=True, 
+            text=True, 
+            capture_output=True,
+            timeout=timeout
+        )
         
-        # 运行命令
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        
-        # 根据执行结果返回
         if result.returncode == 0:
-            return f"login success! output:\n{result.stdout}"
+            return f"Command executed successfully:\n{result.stdout}"
         else:
-            return f"login failed! error:\n{result.stderr}"
+            return f"Command failed with error:\n{result.stderr}"
+    except subprocess.TimeoutExpired:
+        return f"Command timed out after {timeout} seconds"
     except Exception as e:
-        return f"exec error:{str(e)}"
+        return f"Error executing command: {str(e)}"
+
+
+def run_login(api_key: str) -> str:
+    """登录到ivry"""
+    if not api_key:
+        return "Error: API key is required"
+        
+    return run_command(f"ivry_cli login {api_key}")
+
+
+def run_init(project_name: str) -> str:
+    """初始化项目"""
+    if not project_name:
+        return "Error: Project name is required"
+        
+    return run_command(f"ivry_cli init_app --project_name {project_name} --mode comfyui")
+
+
+def run_upload(project_name: str) -> str:
+    """上传项目"""
+    if not project_name:
+        return "Error: Please enter your project name"
     
-def run_init(project_name):
-    try:
-        # 构造命令
-        command = f"ivry_cli init_app --project_name {project_name} --mode comfyui"
-        
-        # 运行命令
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        
-        # 根据执行结果返回
-        if result.returncode == 0:
-            return f"init success! output:\n{result.stdout}"
-        else:
-            return f"init failed! error:\n{result.stderr}"
-    except Exception as e:
-        return f"exec error:{str(e)}"
-
-def run_upload(project_name):
-    if project_name == '':
-        raise ValueError("Please enter your project name")
-
-
-    import shutil
+    project_dir = Path(project_name)
+    if not project_dir.exists():
+        return "Error: Please init your project first"
+    
     source_file = Path("predict.py")
-    destination_folder = Path(project_name)
-    destination_file = destination_folder / source_file.name
-
-    if not destination_folder.exists():
-        raise ValueError("Please init your project first")
-
     if not source_file.exists():
-        print("predict.py does not exist.")
-    else:
+        return "Error: predict.py does not exist."
+    
+    try:
+        # 复制predict.py到项目目录
+        import shutil
+        destination_file = project_dir / source_file.name
         shutil.copy(source_file, destination_file)
-
-    try:
-        # 构造命令
-        command = f"ivry_cli upload_app --model_name {project_name}"
         
-        # 运行命令
-        result = subprocess.run(command, shell=True, text=True, capture_output=True)
-        
-        # 根据执行结果返回
-        if result.returncode == 0:
-            return f"成功上传！输出：\n{result.stdout}"
-        else:
-            return f"上传失败！错误：\n{result.stderr}"
+        # 上传应用
+        return run_command(f"ivry_cli upload_app --model_name {project_name}")
     except Exception as e:
-        return f"执行命令出错：{str(e)}"
+        return f"Error: {str(e)}"
+
+
+def start_project_x(target_path: str) -> str:
+    """启动ivry_cli服务器"""
+    if not target_path:
+        return "Error: Please enter your project name"
     
-
-
-
-def get_local_ip(ip):
-    # 执行 shell 命令
+    target_dir = Path(target_path)
+    if not target_dir.exists():
+        return f"Error: Target path '{target_path}' does not exist."
+    
     try:
-        result = subprocess.check_output(
-            "ip route | grep default | awk '{print $3}'", shell=True, text=True
-        ).strip()
-        return result + ":" + str(ip)
-    except subprocess.CalledProcessError as e:
-        return f"Error: {e}"
-
-
-def win_path_to_wsl_path(win_path):
-    """
-    将 Windows 路径转换为 WSL 路径：
-    - 替换盘符，如 'C:\\' -> '/mnt/c/'
-    - 将所有反斜杠 '\' 替换为 '/'
-    """
-    # 统一将反斜杠替换为正斜杠
-    if not win_path:
-        raise ValueError("Input path is empty. Please provide a valid Windows path.")
-
-    path_unix = win_path.replace("\\", "/")
-
-    # 如果路径形如 "C:/..."（长度至少2，并且第2个字符是 ':')
-    # 那么把它转为 "/mnt/c/..."
-    if len(path_unix) >= 2 and path_unix[1] == ':':
-        drive_letter = path_unix[0].lower()  # 例如 'c'
-        path_unix = "/mnt/" + drive_letter + path_unix[2:]  # 去掉 "C:"，前面补 "/mnt/c"
-
-    return path_unix
-
-def start_project_x(target_path):
-
-    if target_path == '':
-        raise ValueError("Please enter your project name")
-
-    """运行 ivry_cli 子进程，并写入日志文件。"""
-    global project_x_process
-    target_dir = Path(target_path)
-    if not target_dir.exists():
-        return f"Error: Target path '{target_path}' does not exist."
-
-    with open(target_dir / "client.log", "w") as log_file:
-        subprocess.Popen(
-            [
-                "ivry_cli", "start", "model",
-                "--upload-url=https://www.ivry.co/pc/client-api/upload"
-            ],
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=target_dir  # 设置工作目录
-        )
-
-    global cloudflare_process
-    target_dir = Path(target_path)
-    if not target_dir.exists():
-        return f"Error: Target path '{target_path}' does not exist."
-
-    with open(target_dir / "cloudflare.log", "w") as log_file:
-        subprocess.Popen(
-            ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=target_dir  # 设置工作目录
-        )
-    return f"ivry_cli started in {target_path}. Logs are being written to client.log."
-
-def start_cloudflare(target_path):
-
-    if target_path == '':
-        raise ValueError("Please enter your project name")
-    
-
-    """运行 cloudflared 子进程，并写入日志文件。"""
-    global cloudflare_process
-    target_dir = Path(target_path)
-    if not target_dir.exists():
-        return f"Error: Target path '{target_path}' does not exist."
-
-    with open(target_dir / "cloudflare.log", "w") as log_file:
-        subprocess.Popen(
-            ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            cwd=target_dir  # 设置工作目录
-        )
-    return f"Cloudflare started in {target_path}. Logs are being written to cloudflare.log."
-
-def sync_data(data):
-    return data
-
-
-def stop_processes():
-
-    def kill_process_by_port(port):
-        try:
-            # 使用 lsof 找到使用指定端口的进程
-            result = subprocess.run(
-                ["lsof", "-t", f"-i:{port}"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+        # 启动ivry_cli
+        with open(target_dir / "client.log", "w") as log_file:
+            subprocess.Popen(
+                [
+                    "ivry_cli", "start", "model",
+                    f"--upload-url={IVRY_URL}pc/client-api/upload"
+                ],
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                cwd=target_dir
             )
-            pids = result.stdout.strip().split("\n")
+        
+        # 启动cloudflare隧道
+        with open(target_dir / "cloudflare.log", "w") as log_file:
+            subprocess.Popen(
+                ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                cwd=target_dir
+            )
+            
+        return f"Service started in {target_path}. Logs are being written to client.log and cloudflare.log."
+    except Exception as e:
+        return f"Error starting service: {str(e)}"
 
-            if not pids or result.returncode != 0:
-                return f"No process found on port {port}."
 
-            # 杀死所有找到的进程
-            for pid in pids:
-                os.kill(int(pid), signal.SIGTERM)
-
-            return f"Terminated processes on port {port}: {', '.join(pids)}"
-        except Exception as e:
-            return f"Error terminating processes on port {port}: {e}"
-    
-    def terminate_process(name):
-        try:
-            # List all processes and find those matching the name
-            result = subprocess.run(["pgrep", "-f", name], stdout=subprocess.PIPE, text=True)
-            pids = result.stdout.strip().split("\n")
-            if pids:
+def stop_processes() -> str:
+    """停止所有服务进程"""
+    try:
+        def terminate_process(name: str) -> None:
+            try:
+                result = subprocess.run(["pgrep", "-f", name], stdout=subprocess.PIPE, text=True)
+                pids = [pid.strip() for pid in result.stdout.strip().split("\n") if pid.strip()]
+                
                 for pid in pids:
-                    os.kill(int(pid), signal.SIGTERM)
-                print(f"Terminated {name} processes with PIDs: {', '.join(pids)}")
-            else:
-                print(f"No processes found for {name}")
-        except Exception as e:
-            print(f"Error stopping {name}: {e}")
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        print(f"Terminated {name} process with PID: {pid}")
+                    except ProcessLookupError:
+                        continue
+            except Exception as e:
+                print(f"Error stopping {name}: {e}")
+        
+        def kill_process_by_port(port: int) -> None:
+            try:
+                result = subprocess.run(
+                    ["lsof", "-t", f"-i:{port}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                pids = [pid for pid in result.stdout.strip().split("\n") if pid]
+                
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        continue
+            except Exception:
+                pass
+        
+        # 终止ivry_cli进程
+        terminate_process("ivry_cli")
+        
+        # 终止cloudflared进程
+        terminate_process("cloudflared tunnel --config tunnel_config.json run")
+        
+        # 终止3009端口上的进程
+        kill_process_by_port(3009)
+        
+        return "All server processes have been stopped."
+    except Exception as e:
+        return f"Error stopping processes: {str(e)}"
 
-    # Terminate `ivry_cli` process
-    terminate_process("ivry_cli")
 
-    # Terminate `cloudflared` process
-    terminate_process("cloudflared tunnel --config tunnel_config.json run")
+def upload_python_signature(file) -> gr.update:
+    """上传Python文件并提取签名"""
+    if file is None:
+        return gr.update(choices=[], value=None)
     
-    kill_process_by_port(3009)
-
-    return "All server processes have been stopped."
-
-def upload_python_signature(file):
-    global python_dict_inputs
-    if file is not None:
-        # 读取 JSON 文件
+    try:
         from pathlib import Path
-        json_data = parse_predict_return(Path(file.name) ,"json")
-        python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
-
-        unique_keys = list(set(python_dict_inputs))  # 去重
-        return gr.update(choices=unique_keys, value=unique_keys[0])  # 更新 Dropdown 的选项
+        json_data = parse_predict_return(Path(file.name), "json")
+        state.python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
         
-
-
-        
-    return gr.update(choices=[], value=None)
+        if not state.python_dict_inputs:
+            return gr.update(choices=[], value=None)
+            
+        unique_keys = list(state.python_dict_inputs.keys())
+        return gr.update(choices=unique_keys, value=unique_keys[0])
+    except Exception:
+        return gr.update(choices=[], value=None)
 
 
 def upload_python(file):
-    global python_dict_inputs
-    if file is not None:
-        # 读取 JSON 文件
+    """上传Python文件并解析"""
+    if file is None:
+        return "No file uploaded!"
+    
+    try:
         from pathlib import Path
-        json_data = parse_predict_return(Path(file.name) ,"json")
-        python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
+        json_data = parse_predict_return(Path(file.name), "json")
+        state.python_dict_inputs = {item["name"]: item["type"] for item in json_data["inputs"]}
+        return state.python_dict_inputs
+    except Exception as e:
+        return f"Error: {str(e)}"
 
-        return python_dict_inputs  # 可以将数据存入全局变量或返回显示在界面上
-    return "No file uploaded!"
 
-
-def update_component_type(element_name):
-    
-    if python_dict_inputs[element_name] == "int":
-        component_name = ["slider","input","multi-select","single-select"]
-    elif python_dict_inputs[element_name] == "float":
-        component_name = ["slider","input","multi-select","single-select"]
-    elif python_dict_inputs[element_name] == "str":
-        component_name = ["textarea","input","multi-select","single-select"]
-    elif python_dict_inputs[element_name] == "bool":    
-        component_name = ["checkbox"]
-    elif python_dict_inputs[element_name] == "Path":
-        component_name = ["file-upload","single-select"]
-    if len(component_name) > 0:
-        return gr.update(choices=component_name, value=component_name[0] if component_name else None)
-    else:
+def update_component_type(element_name: str) -> gr.update:
+    """根据元素类型更新组件类型选项"""
+    if element_name not in state.python_dict_inputs:
         return gr.update(choices=[], value=None)
- 
-def process_signature_selection(element_name, component_type):
-    global signature
-    global signature_list
+    
+    element_type = state.python_dict_inputs[element_name]
+    component_types = {
+        "int": ["slider", "input", "multi-select", "single-select"],
+        "float": ["slider", "input", "multi-select", "single-select"],
+        "str": ["textarea", "input", "multi-select", "single-select"],
+        "bool": ["checkbox"],
+        "Path": ["file-upload", "single-select"]
+    }
+    
+    if element_type in component_types and component_types[element_type]:
+        choices = component_types[element_type]
+        return gr.update(choices=choices, value=choices[0])
+    
+    return gr.update(choices=[], value=None)
 
-    if element_name in signature_list:
+
+def process_signature_selection(element_name: str, component_type: str) -> str:
+    """处理签名选择并更新签名文本"""
+    if not element_name or not component_type:
+        return "Error: Element name and component type are required"
+    
+    if element_name in state.signature_list:
         return "This input already in the json, please select another one"
-    else:
-        signature_list.append(element_name)
-        if component_type == "slider":
-            signature +=  '''{
-            "component_type": "slider",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "defaultvalue":"" ,
-            "min":0 ,
-            "max":10
-        },
-        '''
-        elif component_type == "input":   
-            signature +=  '''{
-            "component_type": "input",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "defaultvalue": "hello world",
-            "placeholder": "type prompt here"
-        },
-        '''
-        elif component_type == "multi-select":   
-            signature +=  '''{
-            "component_type": "multi-select",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "defaultvalue": [],
-            "options": [
-            { name: "Startup", ram: "12GB", cpus: "6 CPUs", disk: "256GB SSD disk" },
-            { name: "Business", ram: "16GB", cpus: "8 CPUs", disk: "512GB SSD disk" },
-            ]
-        },
-        '''
-        elif component_type == "checkbox":   
-            signature +=  '''{
-            "component_type": "checkbox",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "defaultvalue": "true"
-        },
-        '''
-        elif component_type == "single-select":   
-            signature +=  '''{
-            "component_type": "single-select",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "defaultvalue": "",
-            "options": [
-                "Tom Cook",
-                "Wade Cooper",
-                "Tanya Fox",
-                "Arlene Mccoy",
-                "Devon Webb"
-                ]
-        },
-        '''
-        elif component_type == "textarea":   
-            signature +=  '''{
-            "component_type": "textarea",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": "",
-            "placeholder": "type what you want here",
-            "defaultvalue": ""
-        },
-        '''
-        elif component_type == "file-upload":   
-            signature +=  '''{
-            "component_type": "file-upload",
-            "title": ''' + f'"{element_name}"' + ''',
-            "description": ""
-        },
-        '''
-    return signature
     
-def delete_last_part(text):
-    global signature
-    global signature_list
+    state.signature_list.append(element_name)
     
-
-
-    signature = text
-    parts = signature.strip().split("},")  # 按照 "}," 作为分隔点拆分
-
-    if len(parts) > 0:  # 确保有多部分时才删除
-        signature = "},".join(parts[:-1]) + "}"  # 重新拼接所有部分，去掉最后一部分
-        if signature == "}":
-            signature = ""
-        if len(signature_list) > 0:
-            signature_list.pop()
+    if component_type in COMPONENT_TEMPLATES:
+        state.signature += COMPONENT_TEMPLATES[component_type].format(element_name=element_name)
     else:
-        signature = signature  # 如果只有一部分，保留原始数据
-    return signature
+        return f"Unsupported component type: {component_type}"
+    
+    return state.signature
 
 
-def refresh_logs(project_name):
-    log_path = project_name + "/client.log"
+def delete_last_part(text: str) -> str:
+    """从签名中删除最后一部分"""
+    state.signature = text
+    
+    parts = state.signature.strip().split("},")
+    
+    if len(parts) > 0:
+        state.signature = "},".join(parts[:-1]) + "}"
+        if state.signature == "}":
+            state.signature = ""
+        if state.signature_list:
+            state.signature_list.pop()
+    
+    return state.signature
+
+
+def refresh_logs(project_name: str) -> str:
+    """刷新日志显示"""
+    if not project_name:
+        return "Error: Project name is required"
+    
+    log_path = os.path.join(project_name, "client.log")
+    
     try:
         with open(log_path, "r") as log_file:
-            logs = log_file.read()
-        return logs
+            return log_file.read()
     except FileNotFoundError:
         return "No logs available yet."
     except Exception as e:
         return f"Error reading logs: {e}"
 
 
-def refresh_component(value):
-    """不修改值，仅重新触发渲染"""
+def sync_data(data: str) -> str:
+    """同步数据，保持不变"""
+    return data
+
+
+def refresh_component(value) -> gr.update:
+    """重新渲染组件，不更改值"""
     return gr.update()
 
 
 def main():
+    """主函数：创建和启动Gradio UI"""
     print("Starting Gradio UI...")
     css_path = os.path.abspath("src/styles.css")
+    
     with gr.Blocks(css_paths=css_path) as demo:
         with gr.Tabs():
-            
-
+            # 初始化选项卡
             with gr.Tab("ivry init"):
                 gr.Markdown("# Init Ivry")
-                gr.Markdown("## Step 1: Login to ivry! Creat your account and enter your apikey.")
+                gr.Markdown("## Step 1: Login to ivry! Create your account and enter your apikey.")
+                
                 with gr.Accordion("click to see ivry website", open=False): 
                     gr.HTML("""
-                                <iframe 
-                                    src="https://www.ivry.co/account" 
-                                    width="100%" 
-                                    height="500" 
-                                    frameborder="0">
-                                </iframe>
-                            """)
-
+                        <iframe 
+                            src="https://www.ivry.co/account" 
+                            width="100%" 
+                            height="500" 
+                            frameborder="0">
+                        </iframe>
+                    """)
+                
                 gr.Markdown("### enter your apikey to login to ivry")
-        
-                # 输入组件
                 api_key_input = gr.Textbox(label="API Key", placeholder="enter your API Key", type="password")
-                
-                # 输出组件
                 output_text = gr.Textbox(label="login result")
-                
-                # 按钮触发
                 login_button = gr.Button("api login")
                 login_button.click(run_login, inputs=api_key_input, outputs=output_text)
 
                 gr.Markdown("## Step 2: init your app! Please give it a good name!")
-
-                # 输入组件
                 project_name_input = gr.Textbox(label="Project Name", placeholder="enter your project name")
-                
-                # 输出组件
                 init_output_text = gr.Textbox(label="init result")
-                
-                # 按钮触发
-                login_button = gr.Button("init")
-                login_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
+                init_button = gr.Button("init")
+                init_button.click(run_init, inputs=project_name_input, outputs=init_output_text)
 
                 gr.Markdown("## Step 3: Go to Predict.py Generator tab to generate your predict.py!")
 
+            # Predict.py 生成器选项卡
             with gr.Tab("Predict.py Generator"):
-                # TODO 
-                # Add json file dir
-            
-                options_list = ["int", "float", "str", "Path" ,"bool"]
+                options_list = ["int", "float", "str", "Path", "bool"]
 
                 gr.Markdown("## Cog predict.py Generator")
-                os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"], interactive=True)
-                with gr.Row():
-                    with gr.Column():
-                        dir_comfyui = gr.Textbox(label="comfy dir", placeholder="comfy dir, (where your main.py locate) example: /home/ivry/comfyui", value="")
-                    with gr.Column():    
-                        port_comfyui = gr.Textbox(label="comfyUI port",placeholder="port_comfyui", value="8188")
+                os_system = gr.Dropdown(label="os system", choices=["linux/macos", "windows"],value="linux/macos" ,interactive=True)
                 
-                '''
-                gr.Markdown("### Select an option from the list:")
-
-                input_section = gr.Radio(choices=options_list, label="Choose one", value="Path")
                 with gr.Row():
-                # 创建一个Radio组件
-                    
                     with gr.Column():
-                    # 创建一个显示最终选择列表的输出区域
-                        output = gr.Textbox(label="Selected List", lines=5)
-                        
-                        # 添加按钮和交互逻辑
-                        button = gr.Button("Add to List")
-                        button.click(update_selection, inputs=input_section, outputs=output)
-
-                    with gr.Column():
-                        gr.Markdown("### Delete an option:")
-                        delete_input = gr.Dropdown(label="Select an option to delete", choices=options_list, interactive=True)
-                        delete_button = gr.Button("Delete from List")
-                        delete_button.click(delete_selection, inputs=delete_input, outputs=output)
-                    '''
+                        dir_comfyui = gr.Textbox(
+                            label="comfy dir", 
+                            placeholder="comfy dir, (where your main.py locate) example: /home/ivry/comfyui", 
+                            value=""
+                        )
+                    with gr.Column():    
+                        port_comfyui = gr.Textbox(label="comfyUI port", placeholder="port_comfyui", value="8188")
+                
                 gr.Markdown("### Upload a JSON File")
                 with gr.Row():
-                    ### workflow
-                        
-                    
-                
-                    # 上传组件
                     file_input = gr.File(label="Upload JSON File", file_types=[".json"])
-                    
-                    # 输出组件
                     json_output = gr.JSON(label="File Content (Loaded in Memory)")
-                    
-                    # 绑定上传文件和显示内容的逻辑
-                    file_input.change(upload_json, inputs=file_input, outputs=json_output)
-                    
-
-                    main_options = extract_keys(json_data)
-
+                
+                file_input.change(upload_json, inputs=file_input, outputs=json_output)
+                
                 gr.Markdown("### Choose your inputs")
                 with gr.Row():
-                    
-                
-                    # 主选单
-                        # 主菜单（动态更新）
                     main_menu = gr.Dropdown(label="Node Id and name", choices=[], interactive=True)
                     
-                    # 次级菜单（动态更新）
                     with gr.Column(scale=1, min_width=300, elem_id="dropdown-container"):
                         sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
-                        refresh_btn = gr.Button("↻", elem_id="tiny-refresh-btn")  # 小按钮
-                         
-
-                    sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True, value="int")
-
+                        refresh_btn = gr.Button("↻", elem_id="tiny-refresh-btn")
+                    
+                    sub_sub_menu = gr.Dropdown(
+                        label="Input types", 
+                        choices=options_list, 
+                        interactive=True, 
+                        value="int"
+                    )
+                    
                     rename = gr.Textbox(label="Optional: give the input a name", interactive=True)
-                    
-                    
-
-                    
-                refresh_btn.click(refresh_component, inputs=[sub_menu], outputs=sub_menu)  # 重新渲染
                 
-
-                # 按钮
-                submit_button = gr.Button("Submit")
-                    
-
-                # 输出区域
-                output_workflow = gr.Textbox(label="Result", interactive=False)
-
-                # 当主选单改变时，动态更新次级选单
+                refresh_btn.click(refresh_component, inputs=[sub_menu], outputs=sub_menu)
                 main_menu.change(update_submenu, inputs=main_menu, outputs=sub_menu)
-
-                # 提交按钮处理最终结果
-                submit_button.click(process_selection, inputs=[main_menu, sub_menu, sub_sub_menu, rename], outputs=output_workflow)
-                # 删除按钮
-                delete_button = gr.Button("Delete Last Line")
                 
-                # 按下按钮后删除最后一行
+                submit_button = gr.Button("Submit")
+                output_workflow = gr.Textbox(label="Result", interactive=False)
+                
+                submit_button.click(
+                    process_selection, 
+                    inputs=[main_menu, sub_menu, sub_sub_menu, rename], 
+                    outputs=output_workflow
+                )
+                
+                delete_button = gr.Button("Delete Last Line")
                 delete_button.click(delete_last_line, inputs=output_workflow, outputs=output_workflow)
-
-
-
-                # 上传文件后更新主菜单
+                
                 file_input.change(upload_json_and_update_menu, inputs=file_input, outputs=main_menu)
-                #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
                 file_input.change(clear_cache, inputs=[], outputs=output_workflow)
-                #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
-
+                
                 final_output = gr.Textbox(label="Output", interactive=False)
                 generate_button = gr.Button("Generate predict.py")
-                # 定义按钮点击行为
                 generate_button.click(
                     generate_predict_file,
                     inputs=[dir_comfyui, port_comfyui, output_workflow, os_system],
                     outputs=final_output
                 )
 
+            # 编辑输入选项卡
             with gr.Tab("Edit Inputs"):
-                gr.Markdown("# Edit your UI" )
+                gr.Markdown("# Edit your UI")
                 gr.Markdown("## Upload your predict.py (If you just used predict.py generator, predict.py locate in your ivry root folder)")
-                # 上传组件
+                
                 python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
-                
-                # 输出组件
                 python_output = gr.JSON(label="File Content (Loaded in Memory)")
-                # 绑定上传文件和显示内容的逻辑
                 python_input.change(upload_python, inputs=python_input, outputs=python_output)
-                with gr.Row():
-                    
                 
-                    # 主选单
-                        # 主菜单（动态更新）
+                with gr.Row():
                     element_name = gr.Dropdown(label="element name", choices=[], interactive=True)
-                    
-                    # 次级菜单（动态更新）
                     component_type = gr.Dropdown(label="component type", choices=[], interactive=True)
-
-                # 上传文件后更新主菜单
+                
                 with gr.Row():
                     submit_button = gr.Button("Submit")
-                    # 删除按钮
                     delete_button = gr.Button("Delete Last component")
-                predict_signature_output = gr.Textbox(label="Result", interactive=True,max_lines=30)
-                # 按下按钮后删除最后一行
-                submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
-                delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
+                
+                predict_signature_output = gr.Textbox(
+                    label="Result", 
+                    interactive=True,
+                    max_lines=30
+                )
+                
+                submit_button.click(
+                    process_signature_selection, 
+                    inputs=[element_name, component_type], 
+                    outputs=predict_signature_output
+                )
+                
+                delete_button.click(
+                    delete_last_part, 
+                    inputs=predict_signature_output, 
+                    outputs=predict_signature_output
+                )
+                
                 element_name.change(update_component_type, inputs=element_name, outputs=component_type)
                 python_input.change(upload_python_signature, inputs=python_input, outputs=element_name)
-                #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
                 python_input.change(clear_cache, inputs=[], outputs=output_workflow)
-                #output.change(update_subsubmenu, inputs=output, outputs=sub_sub_menu)
-
+                
                 signature_final_output = gr.Textbox(label="signature Output", interactive=False)
+                
                 with gr.Row():
-                    preoject_siginature_name = gr.Textbox(label="signature Project Name", placeholder="enter your project name")
+                    preoject_siginature_name = gr.Textbox(
+                        label="signature Project Name", 
+                        placeholder="enter your project name"
+                    )
                     signature_generate_button = gr.Button("Generate predict_signature.json")
-                # 定义按钮点击行为
+                
                 signature_generate_button.click(
                     generate_signature_file,
-                    inputs=[preoject_siginature_name,predict_signature_output],
+                    inputs=[preoject_siginature_name, predict_signature_output],
                     outputs=signature_final_output
                 )
 
+            # 上传和托管应用选项卡
             with gr.Tab("upload and host app"):
                 gr.Markdown("## Step 4: upload your app, enter your project name")
-                # 输入组件
-                upload_name_input = gr.Textbox(label="Upload Project Name", placeholder="enter your project name")
                 
-                # 输出组件
+                upload_name_input = gr.Textbox(
+                    label="Upload Project Name", 
+                    placeholder="enter your project name"
+                )
+                
                 upload_output_text = gr.Textbox(label="upload result")
+                upload_button = gr.Button("upload")
+                upload_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
                 
-                # 按钮触发
-                login_button = gr.Button("upload")
-                login_button.click(run_upload, inputs=upload_name_input, outputs=upload_output_text)
-
                 gr.Markdown("### Subprocess Runner")
-
-
                 project_x_path_input = gr.Textbox(label="Target Path for ivry_cli")
-
+                
                 with gr.Row():
                     gr.Markdown("#### ivry_cli")
                     start_project_x_button = gr.Button("Start ivry_cli")
                     project_x_status = gr.Textbox(label="ivry_cli Status", interactive=False)
-
-
+                
                 with gr.Row():
                     gr.Markdown("#### Stop Processes")
                     stop_processes_button = gr.Button("Stop All Processes")
                     stop_processes_status = gr.Textbox(label="Stop Processes Status", interactive=False)
-
+                
                 log_output = gr.Textbox(label="Logs", lines=20, interactive=False)
                 refresh_button = gr.Button("Refresh Logs")
-                refresh_button.click(refresh_logs, inputs=project_x_path_input ,outputs=log_output)
-            
-            
-                # 按钮交互逻辑
-                #upload_name_input.change(sync_data,inputs=upload_name_input, outputs=cloudflare_status)
-                start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
-                stop_processes_button.click(stop_processes, outputs=stop_processes_status)
-
-
-                # input textbox syncup
+                refresh_button.click(refresh_logs, inputs=project_x_path_input, outputs=log_output)
+                
+                # 跨选项卡字段同步
                 project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=upload_name_input)
                 project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
                 project_name_input.change(fn=sync_data, inputs=project_name_input, outputs=preoject_siginature_name)
-                                                                                        
+                upload_name_input.change(fn=sync_data, inputs=upload_name_input, outputs=project_x_path_input)
+                
+                # 按钮交互逻辑
+                start_project_x_button.click(start_project_x, inputs=project_x_path_input, outputs=project_x_status)
+                stop_processes_button.click(stop_processes, outputs=stop_processes_status)
 
-                upload_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
-
-    
-
+    # 启动Gradio应用
     demo.launch()
+
 
 if __name__ == "__main__":
     main()
