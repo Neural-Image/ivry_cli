@@ -78,7 +78,7 @@ def generate_signature_file(project_name, signature_text):
             return validation_error
         
         
-        with open(project_name + '/predict_signature.json', 'w') as file:
+        with open("./" + project_name + '/predict_signature.json', 'w') as file:
             json.dump(signature_json_data, file, indent=4, ensure_ascii=False)
         
         return project_name +"/predict_signature.json generated successfully!"
@@ -192,18 +192,6 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
             cur_input_dict[tmp_node_id].pop(0)
             cur_input_type[tmp_node_id].pop(0)
 
-
-
-
-
-
-    ###
-    
-    
-    
-    
-    
-    
     
     folder = Path("comfyui_workflows/" + json_name)  # 文件夹的相对路径
     absolute_path = folder.resolve()  # 获取绝对路径
@@ -214,10 +202,6 @@ def generate_predict_file(dir_comfyui, port_comfyui, input_section, os_system):
     content = content.replace("{{input_section}}", input_parameter)
     content = content.replace("{{workflow_dir}}", f"r'{absolute_path}'")
     content = content.replace("{{logic_section}}", logic_section)
-
-
-
-
 
     # 保存为 predict.py
     with open("predict.py", "w") as predict_file:
@@ -247,6 +231,8 @@ def process_selection(main_selection, sub_selection, sub_sub_selection, rename):
     global input_dict
     global input_type
     global input_names
+    if rename == "":
+        rename = sub_selection
     if " " in rename:
         return "Please use underscore instead of space"
     if rename in input_names:
@@ -268,7 +254,6 @@ def process_selection(main_selection, sub_selection, sub_sub_selection, rename):
             input_type[main_selection.split(' ')[0]].append(sub_sub_selection)
         
         input_names.append(rename)
-        
         final_inputs.append(main_selection.split(' ')[0] + sub_selection)
         if len(final_inputs) == 1:
             workflow_parsing += main_selection.split(' ')[0] + '_' + sub_selection + ": " + sub_sub_selection + f"= Input(description=''),-------->{rename}<--------"
@@ -775,15 +760,15 @@ def refresh_logs(project_name):
         return f"Error reading logs: {e}"
 
 
-
-
-
-
+def refresh_component(value):
+    """不修改值，仅重新触发渲染"""
+    return gr.update()
 
 
 def main():
     print("Starting Gradio UI...")
-    with gr.Blocks() as demo:
+    css_path = os.path.abspath("src/styles.css")
+    with gr.Blocks(css_paths=css_path) as demo:
         with gr.Tabs():
             
 
@@ -888,13 +873,21 @@ def main():
                     main_menu = gr.Dropdown(label="Node Id and name", choices=[], interactive=True)
                     
                     # 次级菜单（动态更新）
-                    sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
-                        
+                    with gr.Column(scale=1, min_width=300, elem_id="dropdown-container"):
+                        sub_menu = gr.Dropdown(label="input options", choices=[], interactive=True)
+                        refresh_btn = gr.Button("↻", elem_id="tiny-refresh-btn")  # 小按钮
+                         
 
-                    sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True)
+                    sub_sub_menu = gr.Dropdown(label="Input types", choices=options_list, interactive=True, value="int")
 
                     rename = gr.Textbox(label="Optional: give the input a name", interactive=True)
                     
+                    
+
+                    
+                refresh_btn.click(refresh_component, inputs=[sub_menu], outputs=sub_menu)  # 重新渲染
+                
+
                 # 按钮
                 submit_button = gr.Button("Submit")
                     
@@ -960,12 +953,6 @@ def main():
                 # 按下按钮后删除最后一行
                 submit_button.click(process_signature_selection, inputs=[element_name, component_type], outputs=predict_signature_output)
                 delete_button.click(delete_last_part, inputs=predict_signature_output, outputs=predict_signature_output)
-
-
-
-
-
-                
                 element_name.change(update_component_type, inputs=element_name, outputs=component_type)
                 python_input.change(upload_python_signature, inputs=python_input, outputs=element_name)
                 #file_input.change(lambda _: "JSON file uploaded and main menu updated!", inputs=file_input, outputs=output_workflow)
@@ -1029,6 +1016,8 @@ def main():
                                                                                         
 
                 upload_name_input.change(fn=sync_data, inputs=project_name_input, outputs=project_x_path_input)
+
+    
 
     demo.launch()
 
