@@ -13,13 +13,14 @@ import shutil
 from util import get_apikey, find_comfyui_processes, get_comfyui_install_path, get_comfyui_ports
 import subprocess
 import signal
+from heartbeat import HeartbeatManager
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
 IVRY_URL = "https://www.ivry.co/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
-
+_heartbeat_manager = None
 
 class Cli:
     def init_app(self, project_name: str, mode: str = "comfyui"):
@@ -132,6 +133,16 @@ class Cli:
     
     
     def start_server(self):
+        global _heartbeat_manager
+        
+        try:
+            with open("tunnel_credential.json", "r") as f:
+                config = json.load(f)
+                model_id = config.get("TunnelName")
+        except (FileNotFoundError, json.JSONDecodeError):
+            model_id = None
+            
+        
         with open("client.log", "w") as log_file:
             p_cf = subprocess.Popen(
                 ["project-x", "start", "model",f"--upload-url={IVRY_URL}pc/client-api/upload"],
@@ -149,7 +160,34 @@ class Cli:
             )
         print("cloudflare is running. Logs are being written to cloudflare.log.")
 
+        try:
+            if model_id:
+                apikey = get_apikey()
+                upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
+                
+                # 停止旧的心跳管理器（如果存在）
+                if _heartbeat_manager:
+                    _heartbeat_manager.stop()
+                    
+                # 创建并启动新的心跳管理器
+                _heartbeat_manager = HeartbeatManager(
+                    upload_url=upload_url,
+                    model_id=model_id,
+                    api_key=apikey,
+                    interval=heartbeat_interval
+                )
+                _heartbeat_manager.start()
+                print(f"Heartbeat service started with interval of {heartbeat_interval} seconds")
+        except Exception as e:
+            print(f"Error starting heartbeat service: {e}")
+
+
     def stop_server(self):
+        global _heartbeat_manager
+        if _heartbeat_manager:
+            _heartbeat_manager.stop()
+            _heartbeat_manager = None
+            print("Heartbeat service stopped")
     # Helper function to terminate a process by its name
         def terminate_process(name):
             try:
@@ -246,6 +284,16 @@ class Cli:
             print(f"detected ComfyUI process: PID={pid}, name={name}")
             print(f"  comfyUI install path: {path if path else 'nothing detected'}")
             print(f"  listning port: {port if port else 'nothing detected'}")
+
+
+    def get_heartbeat_status(self):
+        """获取心跳状态"""
+        global _heartbeat_manager
+        
+        if _heartbeat_manager:
+            return _heartbeat_manager.get_status()
+        return {"running": False, "message": "Heartbeat service not started"}
+
 
 
 def main():
