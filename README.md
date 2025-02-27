@@ -1,7 +1,9 @@
 # Project-X Documentation
 
 ## 🔥 Updates
-
+- **2025/02/26**: WebUI updates:
+  - Find ComfyUI information
+  - better UI
 - **2025/02/08**: WebUI updates:
   - Input type validation
   - Log monitor
@@ -147,10 +149,11 @@ pip install websocket-client
 
 ## TODOs
 
-- [ ] Support input names with spaces
-- [ ] Add notification system for WebUI
-- [ ] Improve WebUI instructions
-- [ ] Implement workflow packaging
+- [ ] Implement find comfyUI function in webui
+- [ ] Support web pull
+- [ ] wsl2 package
+- [ ] heartbeat sending 
+
 
 ### Completed Tasks:
 ✅ Windows version support  
