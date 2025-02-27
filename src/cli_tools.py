@@ -14,6 +14,7 @@ from util import get_apikey, find_comfyui_processes, get_comfyui_install_path, g
 import subprocess
 import signal
 from heartbeat import HeartbeatManager
+from websocket_comfyui import create_predict
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
@@ -293,6 +294,110 @@ class Cli:
         if _heartbeat_manager:
             return _heartbeat_manager.get_status()
         return {"running": False, "message": "Heartbeat service not started"}
+
+
+    def pull_project(self, project_id: str, project_name: str = None):
+        """
+        Pull a project from the backend by its ID.
+        
+        This command retrieves a project configuration from the server, including:
+        - predict.py file content
+        - signature JSON
+        - CloudFlare tunnel configuration
+        
+        It then creates a local project directory with all necessary files.
+        
+        Args:
+            project_id: The ID of the project to pull
+            project_name: Optional name for the local project directory (defaults to project_id if not provided)
+        
+        Returns:
+            str: Status message
+        """
+        # Use the provided project name or default to project_id
+        local_name = project_name or project_id
+        
+        # Get API key for authentication
+        apikey = get_apikey()
+        
+        # Set up headers for the request
+        headers = {
+            'X-API-KEY': str(apikey),
+            'Content-Type': 'application/json',
+        }
+        
+        # Construct the URL for the API endpoint
+        url = f"{IVRY_URL}pc/client-api/projects/{project_id}/pull"
+        
+        try:
+            # Make the request to pull the project
+            print(f"Pulling project {project_id} from server...")
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            
+            project_data = response.json()
+            
+            if project_data.get("httpStatus") != 200:
+                return f"Error: {project_data.get('message', 'Unknown error occurred')}"
+            
+            project_data = project_data.get("data", {})
+            
+            # Create the project directory
+            dest_path = Path.cwd() / local_name
+            if not dest_path.exists():
+                dest_path.mkdir(parents=True, exist_ok=True)
+                print(f"Directory {dest_path} created.")
+            else:
+                print(f"Directory {dest_path} already exists.")
+            
+            # Extract data from response
+            signature_data = project_data.get("signature", {})
+            tunnel_config = project_data.get("tunnelConfig", {})
+            tunnel_credential = project_data.get("tunnelCredential", {})
+            predict_content = create_predict()
+            
+            # Save the predict.py file
+            with open(dest_path / "predict.py", "w", encoding="utf-8") as f:
+                f.write(predict_content)
+            print(f"predict.py saved to {dest_path}")
+            
+            # Save signature data as JSON
+            if signature_data:
+                with open(dest_path / "predict_signature.json", "w", encoding="utf-8") as f:
+                    json.dump(signature_data, f, indent=4)
+                print(f"predict_signature.json saved to {dest_path}")
+            
+            # Save tunnel configuration
+            if tunnel_config:
+                with open(dest_path / "tunnel_config.json", "w", encoding="utf-8") as f:
+                    json.dump(tunnel_config, f, indent=4)
+                print(f"tunnel_config.json saved to {dest_path}")
+            
+            # Save tunnel credentials
+            if tunnel_credential:
+                with open(dest_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
+                    json.dump(tunnel_credential, f, indent=4)
+                print(f"tunnel_credential.json saved to {dest_path}")
+            
+            # Save cog.yaml
+            with open(dest_path / "cog.yaml", "w", encoding="utf-8") as f:
+                f.write('predict: "predict.py:Predictor"\n')
+            print(f"cog.yaml saved to {dest_path}")
+            
+            return f"Project {project_id} successfully pulled to {local_name}/"
+            
+        except requests.exceptions.HTTPError as e:
+            return f"HTTP Error: {str(e)}"
+        except requests.exceptions.ConnectionError:
+            return "Connection Error: Could not connect to the server. Please check your internet connection."
+        except requests.exceptions.Timeout:
+            return "Timeout Error: The request timed out. Please try again later."
+        except requests.exceptions.RequestException as e:
+            return f"Request Error: {str(e)}"
+        except json.JSONDecodeError:
+            return "Error: Invalid response received from server (not valid JSON)"
+        except Exception as e:
+            return f"Unexpected error: {str(e)}"
 
 
 

@@ -11,6 +11,10 @@ LOG_FILE = "client.log"
 MIN_INTERVAL = 1  # 最小间隔时间
 
 
+def create_predict():
+    pass
+
+
 def queue_prompt(prompt, client_id, server_address):
     p = {"prompt": prompt, "client_id": client_id}
     data = json.dumps(p).encode('utf-8')
