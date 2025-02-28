@@ -39,6 +39,10 @@ example:
 wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\Ubuntu22-04.tar
 ```
 
+```bash
+wsl -d ivry #to enter the wsl2 
+```
+
 
 ## 3. Run webui
 
