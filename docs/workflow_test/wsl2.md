@@ -39,8 +39,9 @@ example:
 wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\Ubuntu22-04.tar
 ```
 
+password for wsl2 ivry is ivry
 ```bash
-wsl -d ivry #to enter the wsl2 
+wsl -d ivry -u ivry #to enter the wsl2, make sure you enter wsl2 with user ivry (not root) 
 ```
 
 
