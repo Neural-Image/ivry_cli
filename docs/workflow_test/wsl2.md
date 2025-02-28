@@ -49,6 +49,7 @@ wsl -d ivry -u ivry #to enter the wsl2, make sure you enter wsl2 with user ivry 
 
 Run webui by:
 ```bash
-python ui.py
+cd path/to/your/cli
+ivry_web
 ```
 
