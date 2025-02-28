@@ -29,6 +29,17 @@ Install requirements by
 
 note: if your wsl cannot do apt update, you can open install.sh in notebook and copy paste each steps
 
+(optional)
+### 2.2 import wsl2 environment
+```bash
+wsl --import ivry path\to\your\ivry\path path\to\backup.tar
+```
+example:
+```bash
+wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\Ubuntu22-04.tar
+```
+
+
 ## 3. Run webui
 
 Run webui by:
