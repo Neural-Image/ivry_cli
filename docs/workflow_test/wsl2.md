@@ -32,7 +32,7 @@ note: if your wsl cannot do apt update, you can open install.sh in notebook and 
 (optional)
 ### 2.2 import wsl2 environment
 ```bash
-wsl --import ivry path\to\your\ivry\path path\to\backup.tar
+wsl --import ivry path\to\your\wsl\path path\to\backup.tar
 ```
 example:
 ```bash
