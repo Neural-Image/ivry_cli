@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]  # Build dependencies
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "project_x"
+name = "ivry_cli"
 version = "0.1.0"
 description = "A Python package example"
 authors = [
@@ -21,7 +21,9 @@ dependencies = [
   "typing_extensions>=4.4.0",
   "uvicorn[standard]>=0.12,<1",
   "pillow",
-  "fire"
+  "fire",
+  "psutil>=5.8,<6",  # 添加 psutil，确保兼容较新版本
+  "websocket-client>=1.0,<2"  # ✅ 添加 websocket-client
 ]
 
 [tool.setuptools]
@@ -33,4 +35,5 @@ include = ["cog*"]
 exclude = ["tests*"]
 
 [project.scripts]
-project-x = "cli_tools:main"  # CLI tool entry point
+ivry_cli = "cli_tools:main"  # CLI tool entry point
+ivry_web = "ui:main"

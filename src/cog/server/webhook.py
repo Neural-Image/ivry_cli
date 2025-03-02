@@ -12,6 +12,7 @@ from ..types import PYDANTIC_V2
 from .response_throttler import ResponseThrottler
 from .telemetry import current_trace_context
 from .useragent import get_user_agent
+from util import get_apikey
 
 log = structlog.get_logger(__name__)
 
@@ -76,9 +77,28 @@ def requests_session() -> requests.Session:
     for key, value in ctx.items():
         session.headers[key] = str(value)
 
-    auth_token = os.environ.get("WEBHOOK_AUTH_TOKEN")
-    if auth_token:
-        session.headers["authorization"] = "Bearer " + auth_token
+    #auth_token = os.environ.get("WEBHOOK_AUTH_TOKEN")
+    #if auth_token:
+    
+    # trunc log
+
+    file_path = "client.log"
+    max_size = 5 * 1024 * 1024  # 文件最大字节数 5mb
+    if os.path.exists(file_path) and os.path.getsize(file_path) > max_size:
+        with open(file_path, "rb+") as file:
+            # 定位到最后 max_size 字节的位置
+            file.seek(-max_size, os.SEEK_END)
+            # 读取最新的内容
+            data = file.read()
+            # 清空文件并写入最新内容
+            file.seek(0)
+            file.write(data)
+            file.truncate()
+
+    #
+
+    apikey = get_apikey()
+    session.headers["X-API-KEY"] = str(apikey)
 
     return session
 

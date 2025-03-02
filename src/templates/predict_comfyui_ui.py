@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 1.Please put your comfyUI path here:
-COMFYUI_PATH = "/workspace/ComfyUI"
+COMFYUI_PATH = {{dir_comfyui}}
 # 2.Please put your comfyUI port here: (by defalut is 127.0.0.1:8188 if you run "python main.py --listen")
-server_address = "127.0.0.1:8188"
+server_address = {{port_comfyui}}
 
 
 class Predictor(BasePredictor):
@@ -36,12 +36,12 @@ class Predictor(BasePredictor):
         guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     """
     def predict(self,
-                image_user: Path = Input(description="user input image"),
-                prompt: str = Input(description="Describ what you want!"),
+                {{input_section}}
     ) -> Path:
         client_id = str(uuid.uuid4())
         # 4.put your workflow api path here:
-        workflow_file = "sticker.json"
+        workflow_file = {{workflow_dir}}
+
 
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
             prompt_config = json.load(workflow_file)
@@ -50,10 +50,7 @@ class Predictor(BasePredictor):
         '''
         In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
         '''
-        prompt_config["326"]["inputs"]["image"] = str(image_user) # user input
-        prompt_config["518"]["inputs"]["text"] = prompt # user input
-        prompt_config["658"]["inputs"]["image"] = '/workspace/ComfyUI/input/white1024.png' # taking assets
-        prompt_config["639"]["inputs"]["image"] = '/workspace/ComfyUI/input/final51_03626_.png' # taking assets
+        {{logic_section}}
 
         '''
         If your output node is not from comfy core, you need to define an output path 
@@ -91,8 +88,6 @@ class Predictor(BasePredictor):
 
 
         '''
-
-
         valid_outputs = [file for file in output_path_list if os.path.isfile(file)]
 
 
