@@ -6,6 +6,8 @@ import urllib.request
 import urllib.parse
 import logging
 import time
+import traceback
+import sys
 
 LOG_FILE = "client.log"
 MIN_INTERVAL = 1  # 最小间隔时间
@@ -16,87 +18,153 @@ def create_predict():
 
 
 def queue_prompt(prompt, client_id, server_address):
-    p = {"prompt": prompt, "client_id": client_id}
-    data = json.dumps(p).encode('utf-8')
-    req =  urllib.request.Request("http://{}/prompt".format(server_address), data=data)
-    return json.loads(urllib.request.urlopen(req).read())
+    try:
+        p = {"prompt": prompt, "client_id": client_id}
+        data = json.dumps(p).encode('utf-8')
+        req = urllib.request.Request("http://{}/prompt".format(server_address), data=data)
+        return json.loads(urllib.request.urlopen(req).read())
+    except Exception as e:
+        logger = logging.getLogger("predict_logger")
+        error_msg = f"Error queuing prompt: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        raise
 
 def get_image(filename, subfolder, folder_type, server_address):
-    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
-    url_values = urllib.parse.urlencode(data)
-    with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
-        return response.read()
+    try:
+        data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+        url_values = urllib.parse.urlencode(data)
+        with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
+            return response.read()
+    except Exception as e:
+        logger = logging.getLogger("predict_logger")
+        error_msg = f"Error getting image {filename}: {str(e)}"
+        logger.error(error_msg)
+        raise
 
 def get_history(prompt_id, server_address):
-    with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
-        return json.loads(response.read())
+    try:
+        with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
+            return json.loads(response.read())
+    except Exception as e:
+        logger = logging.getLogger("predict_logger")
+        error_msg = f"Error getting history for prompt {prompt_id}: {str(e)}"
+        logger.error(error_msg)
+        raise
+
+def setup_logger():
+    """Set up the logger with handlers for both file and console output"""
+    logger = logging.getLogger("predict_logger")
+    logger.setLevel(logging.INFO)
+    
+    # Check if handlers already exist to prevent duplicate handlers
+    if not logger.handlers:
+        # File handler
+        file_handler = logging.FileHandler(LOG_FILE)
+        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(file_formatter)
+        
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_formatter = logging.Formatter("%(levelname)s: %(message)s")
+        console_handler.setFormatter(console_formatter)
+        
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+    
+    return logger
 
 def get_images(ws, client_id, prompt, server_address):
-    prompt_id = queue_prompt(prompt, client_id, server_address)['prompt_id']
+    logger = setup_logger()
     output_images = {}
-    logging.basicConfig(
-        level=logging.INFO,  # 设置日志级别为 INFO
-        format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
-        handlers=[
-            logging.FileHandler(LOG_FILE),  # 输出到 client.log 文件
-            logging.StreamHandler()  # 同时输出到控制台（可选）
-        ]
-    )
-    logger = logging.getLogger("predict_logger")
-    last_print_time = 0 
-    while True:
-        out = ws.recv()
-        current_time = time.time()
-        if isinstance(out, str):
-            if current_time - last_print_time >= MIN_INTERVAL:
-                logger.info(out) 
-                last_print_time = current_time
-            message = json.loads(out)
-            if message['type'] == 'executing':
-                data = message['data']
-                if data['node'] is None and data['prompt_id'] == prompt_id:
-                    break #Execution is done
+    last_print_time = 0
+    
+    try:
+        # Queue the prompt and get the prompt ID
+        logger.info("Queuing prompt...")
+        prompt_response = queue_prompt(prompt, client_id, server_address)
+        prompt_id = prompt_response['prompt_id']
+        logger.info(f"Prompt queued with ID: {prompt_id}")
+        
+        # Process execution messages
+        execution_errors = []
+        while True:
+            try:
+                out = ws.recv()
+                current_time = time.time()
+                
+                if isinstance(out, str):
+                    message = json.loads(out)
+                    
+                    # Only log messages at appropriate intervals to avoid spamming
+                    if current_time - last_print_time >= MIN_INTERVAL:
+                        logger.info(f"Received message: {message['type']}")
+                        last_print_time = current_time
+                    
+                    # Check for execution status
+                    if message['type'] == 'executing':
+                        data = message['data']
+                        if data['node'] is None and data['prompt_id'] == prompt_id:
+                            break  # Execution is done
+                    
+                    # Check for error messages
+                    if message['type'] == 'execution_error':
+                        error_msg = f"Execution error in node {message.get('node_id', 'unknown')}: {message.get('exception_message', 'No details')}"
+                        logger.error(error_msg)
+                        execution_errors.append(error_msg)
+                    
+                    # Log progress updates
+                    if message['type'] == 'progress':
+                        if current_time - last_print_time >= MIN_INTERVAL:
+                            logger.info(f"Progress: {message.get('value', 0):.2f}%")
+                            last_print_time = current_time
+                else:
+                    # This is binary data (likely a preview image)
+                    continue
+                    
+            except Exception as e:
+                error_msg = f"Error processing websocket message: {str(e)}\n{traceback.format_exc()}"
+                logger.error(error_msg)
+                # Don't break the loop for individual message errors
+        
+        # Check if there were any execution errors
+        if execution_errors:
+            error_details = "\n".join(execution_errors)
+            logger.error(f"ComfyUI execution failed with errors:\n{error_details}")
+            # 抛出异常，中断处理流程并将错误传播到 Cog
+            raise RuntimeError(f"ComfyUI execution failed with {len(execution_errors)} errors: {error_details}")
         else:
-            # If you want to be able to decode the binary stream for latent previews, here is how you can do it:
-            # bytesIO = BytesIO(out[8:])
-            # preview_image = Image.open(bytesIO) # This is your preview in PIL image format, store it in a global
-            continue #previews are binary data
-
-    history = get_history(prompt_id, server_address)[prompt_id]
-    #NOTE original code 
-    # for node_id in history['outputs']:
-    #     node_output = history['outputs'][node_id]
-    #     images_output = []
-    #     if 'images' in node_output:
-    #         for image in node_output['images']:
-    #             image_data = get_image(image['filename'], image['subfolder'], image['type'])
-    #             images_output.append(image_data)
-    #     output_images[node_id] = images_output
-    #print('history :', history)
-    for node_id in history['outputs']:
-        node_output = history['outputs'][node_id]
-        images_output = []
-        if 'images' in node_output:
-            for image in node_output['images']:
-                images_output.append(image['filename'])
-        if 'gifs' in node_output:
-            for image in node_output['gifs']:
-                images_output.append(image['filename'])
-        if 'videos' in node_output:
-            for image in node_output['videos']:
-                images_output.append(image['filename'])
-        output_images[node_id] = images_output        
-
-    return output_images
-
-
-
-#Commented out code to display the output images:
-
-# for node_id in images:
-#     for image_data in images[node_id]:
-#         from PIL import Image
-#         import io
-#         image = Image.open(io.BytesIO(image_data))
-#         image.show()
-
+            logger.info("Execution completed successfully")
+        
+        # Get history and process output images
+        logger.info(f"Getting history for prompt {prompt_id}...")
+        history = get_history(prompt_id, server_address)[prompt_id]
+        
+        for node_id in history['outputs']:
+            node_output = history['outputs'][node_id]
+            images_output = []
+            
+            if 'images' in node_output:
+                for image in node_output['images']:
+                    logger.info(f"Found output image: {image['filename']}")
+                    images_output.append(image['filename'])
+            
+            if 'gifs' in node_output:
+                for image in node_output['gifs']:
+                    logger.info(f"Found output gif: {image['filename']}")
+                    images_output.append(image['filename'])
+            
+            if 'videos' in node_output:
+                for image in node_output['videos']:
+                    logger.info(f"Found output video: {image['filename']}")
+                    images_output.append(image['filename'])
+            
+            output_images[node_id] = images_output
+        
+        logger.info(f"Processing complete. Found outputs for {len(output_images)} nodes.")
+        return output_images
+        
+    except Exception as e:
+        error_msg = f"Critical error in get_images: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        # 不再返回空字典，而是将错误传播出去
+        raise RuntimeError(f"ComfyUI processing failed: {str(e)}")
