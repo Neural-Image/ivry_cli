@@ -36,16 +36,17 @@ class Predictor(BasePredictor):
         guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
     """
     def predict(self,
-                prompt: str= Input(description=''),
-                prompt1: str= Input(description=''),
-                prompt2: str= Input(description=''),
-                prompt3: str= Input(description=''),
-                prompt4: float= Input(description=''),
+                node_3_cfg: float = Input(description=''),
+                node_6_text: str = Input(description=''),
+                node_3_steps: int = Input(description=''),
+                node_15_image: Path = Input(description=''),
+                node_16_video: Path = Input(description=''),
+                node_3_scheduler: str = Input(description=''),
                 
     ) -> Path:
         client_id = str(uuid.uuid4())
         # 4.put your workflow api path here:
-        workflow_file = r'/Users/steveyang/Desktop/ivry_cli/comfyui_workflows/226test.json'
+        workflow_file = r'/Users/steveyang/Desktop/ivry_cli/comfyui_workflows/3月5日.json'
 
 
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
@@ -55,11 +56,12 @@ class Predictor(BasePredictor):
         '''
         In this example, only node[326] and node[518] are inputs node for users. node[658] and node[639] are taking assets for some usecases like ip-adapter
         '''
-        prompt_config['7']['inputs']['text'] = prompt
-        prompt_config['3']['inputs']['negative'] = prompt1
-        prompt_config['3']['inputs']['positive'] = prompt2
-        prompt_config['3']['inputs']['sampler_name'] = prompt3
-        prompt_config['3']['inputs']['steps'] = prompt4
+        prompt_config['3']['inputs']['cfg'] = node_3_cfg
+        prompt_config['6']['inputs']['text'] = node_6_text
+        prompt_config['3']['inputs']['steps'] = node_3_steps
+        prompt_config['15']['inputs']['image'] = str(node_15_image)
+        prompt_config['16']['inputs']['video'] = str(node_16_video)
+        prompt_config['3']['inputs']['scheduler'] = node_3_scheduler
         
 
         '''

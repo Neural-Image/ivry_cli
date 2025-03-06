@@ -1,0 +1,474 @@
+{
+    "json": {
+        "3": {
+            "_meta": {
+                "title": "K采样器"
+            },
+            "inputs": {
+                "cfg": 8,
+                "seed": 236527279497025,
+                "model": [
+                    "4",
+                    0
+                ],
+                "steps": 20,
+                "denoise": 1,
+                "negative": [
+                    "7",
+                    0
+                ],
+                "positive": [
+                    "6",
+                    0
+                ],
+                "scheduler": "normal",
+                "latent_image": [
+                    "5",
+                    0
+                ],
+                "sampler_name": "euler"
+            },
+            "class_type": "KSampler"
+        },
+        "4": {
+            "_meta": {
+                "title": "Checkpoint加载器（简易）"
+            },
+            "inputs": {
+                "ckpt_name": "v1-5-pruned-emaonly.ckpt"
+            },
+            "class_type": "CheckpointLoaderSimple"
+        },
+        "5": {
+            "_meta": {
+                "title": "空Latent图像"
+            },
+            "inputs": {
+                "width": 512,
+                "height": 512,
+                "batch_size": 1
+            },
+            "class_type": "EmptyLatentImage"
+        },
+        "6": {
+            "_meta": {
+                "title": "positive"
+            },
+            "inputs": {
+                "clip": [
+                    "4",
+                    1
+                ],
+                "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,"
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "7": {
+            "_meta": {
+                "title": "negative"
+            },
+            "inputs": {
+                "clip": [
+                    "4",
+                    1
+                ],
+                "text": "text, watermark"
+            },
+            "class_type": "CLIPTextEncode"
+        },
+        "8": {
+            "_meta": {
+                "title": "VAE解码"
+            },
+            "inputs": {
+                "vae": [
+                    "4",
+                    2
+                ],
+                "samples": [
+                    "3",
+                    0
+                ]
+            },
+            "class_type": "VAEDecode"
+        },
+        "9": {
+            "_meta": {
+                "title": "保存图像"
+            },
+            "inputs": {
+                "images": [
+                    "8",
+                    0
+                ],
+                "filename_prefix": "ComfyUI"
+            },
+            "class_type": "SaveImage"
+        },
+        "12": {
+            "_meta": {
+                "title": "Video Combine 🎥🅥🅗🅢"
+            },
+            "inputs": {
+                "format": "image/gif",
+                "images": [
+                    "16",
+                    0
+                ],
+                "pingpong": false,
+                "frame_rate": 8,
+                "loop_count": 0,
+                "save_output": true,
+                "filename_prefix": "AnimateDiff"
+            },
+            "class_type": "VHS_VideoCombine"
+        },
+        "13": {
+            "_meta": {
+                "title": "Prune Outputs 🎥🅥🅗🅢"
+            },
+            "inputs": {
+                "options": "Intermediate",
+                "filenames": [
+                    "12",
+                    0
+                ]
+            },
+            "class_type": "VHS_PruneOutputs"
+        },
+        "15": {
+            "_meta": {
+                "title": "加载图像"
+            },
+            "inputs": {
+                "image": "150w_1741042631470_12_0_ComfyUI_00027_.png",
+                "upload": "image"
+            },
+            "class_type": "LoadImage"
+        },
+        "16": {
+            "_meta": {
+                "title": "Load Video (Path) 🎥🅥🅗🅢"
+            },
+            "inputs": {
+                "video": "input/369_0_LivePortrait_00002.mp4",
+                "format": "AnimateDiff",
+                "force_rate": 0,
+                "custom_width": 0,
+                "custom_height": 0,
+                "frame_load_cap": 0,
+                "select_every_nth": 1,
+                "skip_first_frames": 0
+            },
+            "class_type": "VHS_LoadVideoPath"
+        },
+        "17": {
+            "_meta": {
+                "title": "保存图像"
+            },
+            "inputs": {
+                "images": [
+                    "15",
+                    0
+                ],
+                "filename_prefix": "ComfyUI"
+            },
+            "class_type": "SaveImage"
+        }
+    },
+    "type": "comfyui",
+    "input": [
+        {
+            "max": 25,
+            "min": 10,
+            "name": "node_3_steps",
+            "type": "number",
+            "alias": "step3",
+            "description": "",
+            "defaultvalue": 20,
+            "component_type": "slider"
+        },
+        {
+            "name": "node_3_cfg",
+            "type": "number",
+            "alias": "cfg",
+            "description": "",
+            "placeholder": "6",
+            "defaultvalue": 6,
+            "component_type": "input"
+        },
+        {
+            "name": "node_3_scheduler",
+            "type": "string",
+            "alias": "scheduler",
+            "options": [
+                "normal",
+                "karras",
+                "simple"
+            ],
+            "description": "",
+            "defaultvalue": "normal",
+            "component_type": "single-select"
+        },
+        {
+            "name": "node_6_text",
+            "alias": "positive prompt",
+            "description": "",
+            "placeholder": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+            "defaultvalue": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+            "component_type": "textarea"
+        },
+        {
+            "name": "node_15_image",
+            "type": "image/*",
+            "alias": "user image",
+            "description": "",
+            "defaultvalue": "",
+            "component_type": "file-upload"
+        },
+        {
+            "name": "node_16_video",
+            "type": "video/*",
+            "alias": "user video",
+            "description": "",
+            "defaultvalue": "",
+            "component_type": "file-upload"
+        }
+    ],
+    "selectedNodes": {
+        "node_3_cfg": {
+            "data": {
+                "name": "node_3_cfg",
+                "type": "number",
+                "placeholder": "6",
+                "defaultvalue": 6,
+                "component_type": "input"
+            },
+            "name": "node_3_cfg",
+            "node": {
+                "_meta": {
+                    "title": "K采样器"
+                },
+                "inputs": {
+                    "cfg": 8,
+                    "seed": 236527279497025,
+                    "model": [
+                        "4",
+                        0
+                    ],
+                    "steps": 20,
+                    "denoise": 1,
+                    "negative": [
+                        "7",
+                        0
+                    ],
+                    "positive": [
+                        "6",
+                        0
+                    ],
+                    "scheduler": "normal",
+                    "latent_image": [
+                        "5",
+                        0
+                    ],
+                    "sampler_name": "euler"
+                },
+                "class_type": "KSampler"
+            },
+            "input": "input",
+            "formData": {
+                "type": "number",
+                "default": 6,
+                "placeholder": "6"
+            }
+        },
+        "node_6_text": {
+            "data": {
+                "name": "node_6_text",
+                "placeholder": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+                "defaultvalue": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+                "component_type": "textarea"
+            },
+            "name": "node_6_text",
+            "node": {
+                "_meta": {
+                    "title": "positive"
+                },
+                "inputs": {
+                    "clip": [
+                        "4",
+                        1
+                    ],
+                    "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,"
+                },
+                "class_type": "CLIPTextEncode"
+            },
+            "input": "textarea",
+            "formData": {
+                "default": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+                "placeholder": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,"
+            }
+        },
+        "node_3_steps": {
+            "data": {
+                "max": 25,
+                "min": 10,
+                "name": "node_3_steps",
+                "type": "number",
+                "defaultvalue": 20,
+                "component_type": "slider"
+            },
+            "name": "node_3_steps",
+            "node": {
+                "_meta": {
+                    "title": "K采样器"
+                },
+                "inputs": {
+                    "cfg": 8,
+                    "seed": 236527279497025,
+                    "model": [
+                        "4",
+                        0
+                    ],
+                    "steps": 20,
+                    "denoise": 1,
+                    "negative": [
+                        "7",
+                        0
+                    ],
+                    "positive": [
+                        "6",
+                        0
+                    ],
+                    "scheduler": "normal",
+                    "latent_image": [
+                        "5",
+                        0
+                    ],
+                    "sampler_name": "euler"
+                },
+                "class_type": "KSampler"
+            },
+            "input": "slider",
+            "formData": {
+                "max": 25,
+                "min": 10,
+                "default": 20
+            }
+        },
+        "node_15_image": {
+            "data": {
+                "name": "node_15_image",
+                "type": "image/*",
+                "defaultvalue": "",
+                "component_type": "file-upload"
+            },
+            "name": "node_15_image",
+            "node": {
+                "_meta": {
+                    "title": "加载图像"
+                },
+                "inputs": {
+                    "image": "150w_1741042631470_12_0_ComfyUI_00027_.png",
+                    "upload": "image"
+                },
+                "class_type": "LoadImage"
+            },
+            "input": "file-upload",
+            "formData": {
+                "type": "image/*"
+            }
+        },
+        "node_16_video": {
+            "data": {
+                "name": "node_16_video",
+                "type": "video/*",
+                "defaultvalue": "",
+                "component_type": "file-upload"
+            },
+            "name": "node_16_video",
+            "node": {
+                "_meta": {
+                    "title": "Load Video (Path) 🎥🅥🅗🅢"
+                },
+                "inputs": {
+                    "video": "input/369_0_LivePortrait_00002.mp4",
+                    "format": "AnimateDiff",
+                    "force_rate": 0,
+                    "custom_width": 0,
+                    "custom_height": 0,
+                    "frame_load_cap": 0,
+                    "select_every_nth": 1,
+                    "skip_first_frames": 0
+                },
+                "class_type": "VHS_LoadVideoPath"
+            },
+            "input": "file-upload",
+            "formData": {
+                "type": "video/*"
+            }
+        },
+        "node_3_scheduler": {
+            "data": {
+                "name": "node_3_scheduler",
+                "type": "string",
+                "options": [
+                    "normal",
+                    "karras",
+                    "simple"
+                ],
+                "defaultvalue": "normal",
+                "component_type": "single-select"
+            },
+            "name": "node_3_scheduler",
+            "node": {
+                "_meta": {
+                    "title": "K采样器"
+                },
+                "inputs": {
+                    "cfg": 8,
+                    "seed": 236527279497025,
+                    "model": [
+                        "4",
+                        0
+                    ],
+                    "steps": 20,
+                    "denoise": 1,
+                    "negative": [
+                        "7",
+                        0
+                    ],
+                    "positive": [
+                        "6",
+                        0
+                    ],
+                    "scheduler": "normal",
+                    "latent_image": [
+                        "5",
+                        0
+                    ],
+                    "sampler_name": "euler"
+                },
+                "class_type": "KSampler"
+            },
+            "input": "single-select",
+            "formData": {
+                "selected": [
+                    {
+                        "label": "normal",
+                        "value": "normal"
+                    },
+                    {
+                        "label": "karras",
+                        "value": "karras"
+                    },
+                    {
+                        "label": "simple",
+                        "value": "simple"
+                    }
+                ],
+                "defaultvalue": "normal"
+            }
+        }
+    }
+}
