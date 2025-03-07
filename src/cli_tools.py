@@ -308,7 +308,7 @@ class Cli:
         return {"running": False, "message": "Heartbeat service not started"}
 
 
-    def pull_project(self, app_id: str, comfyui_port: str = "8188", project_name: str = None):
+    def pull_project(self, app_id: str, comfyui_port: str = "8188", project_name: str = None, comfyUI_dir: str = None):
         """
         从服务器拉取应用配置并创建本地项目目录
         
@@ -377,13 +377,17 @@ class Cli:
                 with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json 已保存到 {dest_path}")
-            
-            comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
+            if comfyUI_dir == None:
+                comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
+            if not comfyUI_dir:
+                return ("error: cannot find your running comfyUI process " + 
+                        f"{comfyui_port} 上。\n" +
+                        "if your comfyUI process is running, you could add it to the command。like: ivry_cli pull_project 66 --comfyui_port 8188 --comfyUI_dir /path/to/comfyUI")
             # 根据配置数据创建必要的预测器文件
             system_name = platform.system().lower()
-            print("1")
+
             generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
-            print("2")
+        
             # 这部分取决于您的具体应用设计，可能需要根据实际情况调整
             source_path = "predict.py"  # 当前目录下的 predict.py
             destination_path = str(project_path) + "/predict.py"  # 目标目录
@@ -477,13 +481,11 @@ class Cli:
             return f"Unexpected error: {str(e)}"
 
 
-    def run_server(self, project_path: str = None, detached: bool = False, force: bool = False):
+    def run_server(self, project_path: str = None, detached: bool = False, force: bool = False, background: bool = False):
         """
-        Starts both the ivry_cli model server and cloudflared tunnel in a single command
-        with supervisor process monitoring.
+        Start the ivry_cli model server and cloudflared tunnel using PM2
         
-        This function combines the functionalities of starting the ivry_cli model server
-        and the cloudflared tunnel, using supervisor to monitor and manage the processes.
+        This function uses PM2 to manage and monitor the ivry_cli model server and cloudflared tunnel processes
         
         Args:
             project_path (str, optional): Path to the project directory. If not provided,
@@ -491,567 +493,460 @@ class Cli:
             detached (bool, optional): If True, runs the servers in detached mode (background).
                                     Default is False.
             force (bool, optional): If True, forcibly restart services even if they're already running.
-                                Default is False.
+                                    Default is False.
+            background (bool, optional): If True, run with nohup in the background. Default is False.
         
         Returns:
             str: A message indicating the result of the operation
         """
-        
-
-        if not SUPERVISOR_AVAILABLE:
-            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
-        
- 
         try:
-            # Try to import supervisor
-            import supervisor.supervisord as supervisord
-            from supervisor.options import ServerOptions
-            from supervisor.xmlrpc import SupervisorTransport
-            import xmlrpc.client
-            import socket
-        except ImportError:
-            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+            # 检查PM2是否已安装
+            import subprocess
+            result = subprocess.run(["pm2", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if result.returncode != 0:
+                return "错误: PM2未安装。请使用'npm install -g pm2'安装PM2。"
+        except FileNotFoundError:
+            return "错误: 未找到PM2。请使用'npm install -g pm2'安装PM2。"
         
-        # Determine project directory
+        # 确定项目目录
         if project_path:
             project_dir = Path(project_path)
         else:
             project_dir = Path.cwd()
         
-        # Verify project directory exists and contains required files
+        # 验证项目目录存在并包含所需文件
         if not project_dir.exists():
-            return f"Error: Project directory '{project_dir}' does not exist."
+            return f"错误: 项目目录'{project_dir}'不存在。"
         
         tunnel_config = project_dir / "tunnel_config.json"
         if not tunnel_config.exists():
-            return f"Error: Could not find tunnel_config.json in '{project_dir}'. Make sure this is a valid ivry project directory."
+            return f"错误: 在'{project_dir}'中找不到tunnel_config.json。确保这是有效的ivry项目目录。"
         
-        # Create supervisor directory if it doesn't exist
-        supervisor_dir = project_dir / "supervisor"
-        supervisor_dir.mkdir(exist_ok=True)
-        
-        # Create logs directory if it doesn't exist
+        # 创建日志目录（如果不存在）
         logs_dir = project_dir / "logs"
         logs_dir.mkdir(exist_ok=True)
         
-        # Define supervisor files
-        supervisor_conf = supervisor_dir / "supervisord.conf"
-        supervisor_log_file = (logs_dir / "supervisord.log").resolve()
-        supervisor_pid_file = (supervisor_dir / "supervisord.pid").resolve()
-        supervisor_sock_file = (supervisor_dir / "supervisor.sock").resolve()
+        # 生成PM2配置文件
+        pm2_config_path = project_dir / "pm2_config.json"
         
-        # Check for already running supervisor instance
-        if supervisor_pid_file.exists() and not force:
-            try:
-                # Read PID file
-                with open(supervisor_pid_file, "r") as f:
-                    pid = int(f.read().strip())
-                    
-                # Check if process exists
-                try:
-                    os.kill(pid, 0)  # Signal 0 only checks if process exists, doesn't terminate it
-                    # Process exists, try to connect to the XMLRPC interface
-                    try:
-                        transport = xmlrpc.client.ServerProxy(
-                            "http://127.0.0.1",
-                            transport=SupervisorTransport(None, None, str(supervisor_sock_file))
-                        )
-                        # Get process info to verify connection works
-                        process_info = transport.supervisor.getAllProcessInfo()
-                        
-                        return (f"A supervisor instance is already running (PID: {pid}).\n"
-                            f"To check status: ivry_cli supervisor_status\n"
-                            f"To restart: ivry_cli supervisor_control restart\n"
-                            f"To force start a new instance: ivry_cli run_server --force")
-                    except Exception:
-                        # Can't connect to XMLRPC, supervisor might be in bad state
-                        print(f"Supervisor process is running but XMLRPC interface is not responding.")
-                        if force:
-                            print("Force flag is set, terminating existing process...")
-                            try:
-                                os.kill(pid, 15)  # SIGTERM
-                                import time
-                                time.sleep(2)  # Give it time to terminate
-                            except OSError:
-                                pass
-                        else:
-                            return (f"Supervisor process (PID: {pid}) appears to be in a bad state.\n"
-                                f"Use --force to terminate it and start a new instance.")
-                except OSError:
-                    # Process doesn't exist, clean up PID file
-                    supervisor_pid_file.unlink()
-                    print(f"Removed stale PID file from previous instance")
-            except (ValueError, IOError) as e:
-                # Invalid PID file format or can't read it
-                supervisor_pid_file.unlink()
-                print(f"Removed invalid PID file: {e}")
+        # 获取model_id（用于标识和日志）
+        try:
+            with open(tunnel_config, "r") as f:
+                config = json.load(f)
+                model_id = config.get("tunnel") or config.get("token") or "unknown"
+        except (json.JSONDecodeError, FileNotFoundError):
+            model_id = "unknown"
         
-        # Check if the sock file exists and remove if needed
-        if supervisor_sock_file.exists():
-            try:
-                supervisor_sock_file.unlink()
-                print(f"Removed stale socket file from previous instance")
-            except OSError as e:
-                print(f"Warning: Could not remove stale socket file: {e}")
-        
-        # Check if ivry server port is already in use
+        # 检查ivry服务器端口是否已被使用
+        import socket
         def check_port(port):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.bind(('127.0.0.1', port))
                 s.close()
-                return False  # Port is free
+                return False  # 端口未被占用
             except socket.error:
-                return True  # Port is in use
+                return True  # 端口已被占用
         
-        # ivry server typically uses port 3009
-        if check_port(3009):
-            print("Warning: Port 3009 is already in use. This may cause conflicts with the ivry server.")
+        # ivry服务器通常使用3009端口
+        if check_port(3009) and not force:
+            return ("Port 3009 is already in use, which will prevent ivry_server from starting.\n"
+                "Please stop any existing ivry_server instances first or use --force to attempt restart.")
+        
+        # 检查是否已有PM2实例在运行相同的应用
+        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if "ivry_server" in result.stdout or "cloudflared_tunnel" in result.stdout:
             if not force:
-                return ("Port 3009 is already in use, which will prevent ivry_server from starting.\n"
-                    "Please stop any existing ivry_server instances first or use --force to attempt restart.")
+                return ("PM2已经在运行ivry服务。\n"
+                    "要查看状态：ivry_cli pm2_status\n"
+                    "要重启：ivry_cli pm2_control restart\n"
+                    "要强制启动新实例：ivry_cli run_server --force")
+            else:
+                # 强制模式：先停止现有进程
+                subprocess.run(["pm2", "delete", "ivry_server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["pm2", "delete", "cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        # 日志文件路径
+        ivry_log_file = (logs_dir / "ivry_server.log").resolve()
+        cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
+        
+        # 创建PM2配置
+        pm2_config = {
+            "apps": [
+                {
+                    "name": "ivry_server",
+                    "script": "ivry_cli",
+                    "args": ["start", "model", f"--upload-url={IVRY_URL}pc/client-api/upload"],
+                    "cwd": str(project_dir),
+                    "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
+                    "output": str(ivry_log_file),
+                    "error": str(ivry_log_file),
+                    "merge_logs": True,
+                    "autorestart": True,
+                    "env": {
+                        "PM2_HOME": str(project_dir / ".pm2")
+                    }
+                },
+                {
+                    "name": "cloudflared_tunnel",
+                    "script": "cloudflared",
+                    "args": ["tunnel", "--config", "tunnel_config.json", "run"],
+                    "cwd": str(project_dir),
+                    "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
+                    "output": str(cloudflared_log_file),
+                    "error": str(cloudflared_log_file),
+                    "merge_logs": True,
+                    "autorestart": True,
+                    "env": {
+                        "PM2_HOME": str(project_dir / ".pm2")
+                    }
+                }
+            ]
+        }
+        
+        # 写入PM2配置
+        with open(pm2_config_path, "w") as f:
+            json.dump(pm2_config, f, indent=4)
+        
+        print(f"Starting ivry_cli model server and cloudflared tunnel for project at: {project_dir}")
+        print(f"Model ID: {model_id}")
+        print(f"Logs will be written to: {logs_dir}")
         
         try:
-            # Get model_id from tunnel config if possible
-            try:
-                with open(tunnel_config, "r") as f:
-                    config = json.load(f)
-                    model_id = config.get("tunnel") or "unknown"
-            except (json.JSONDecodeError, FileNotFoundError):
-                model_id = "unknown"
+            # 启动PM2
+            subprocess.run(["pm2", "start", str(pm2_config_path)], check=True)
             
-            # Absolute paths for log files
-            ivry_log_file = (logs_dir / "ivry_server.log").resolve()
-            cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
+            # 保存PM2配置以便重启后自动恢复
+            subprocess.run(["pm2", "save"], check=True)
             
-            # Create supervisor configuration
-            supervisor_config = f"""[unix_http_server]
-                                    file={supervisor_sock_file}
-                                    chmod=0700
-
-                                    [supervisord]
-                                    logfile={supervisor_log_file}
-                                    pidfile={supervisor_pid_file}
-                                    childlogdir={logs_dir}
-                                    directory={project_dir}
-
-                                    [rpcinterface:supervisor]
-                                    supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
-
-                                    [supervisorctl]
-                                    serverurl=unix://{supervisor_sock_file}
-
-                                    [program:ivry_server]
-                                    command=ivry_cli start model --upload-url={IVRY_URL}pc/client-api/upload
-                                    directory={project_dir}
-                                    autostart=true
-                                    autorestart=true
-                                    redirect_stderr=true
-                                    stdout_logfile={ivry_log_file}
-                                    stderr_logfile={ivry_log_file}
-                                    stopasgroup=true
-                                    killasgroup=true
-                                    priority=1
-
-                                    [program:cloudflared_tunnel]
-                                    command=cloudflared tunnel --config tunnel_config.json run
-                                    directory={project_dir}
-                                    autostart=true
-                                    autorestart=true
-                                    redirect_stderr=true
-                                    stdout_logfile={cloudflared_log_file}
-                                    stderr_logfile={cloudflared_log_file}
-                                    stopasgroup=true
-                                    killasgroup=true
-                                    priority=2
-
-                                    [group:ivry_services]
-                                    programs=ivry_server,cloudflared_tunnel
-                                    """
-
-            # Write supervisor configuration
-            with open(supervisor_conf, "w") as f:
-                f.write(supervisor_config)
+            # 启动心跳服务（如果model_id可用）
+            if model_id and model_id != "unknown":
+                try:
+                    global _heartbeat_manager
+                    apikey = get_apikey()
+                    upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
+                    
+                    # 停止现有的心跳管理器
+                    if _heartbeat_manager:
+                        _heartbeat_manager.stop()
+                    
+                    # 启动新的心跳管理器
+                    _heartbeat_manager = HeartbeatManager(
+                        upload_url=upload_url,
+                        model_id=model_id,
+                        api_key=apikey,
+                        interval=3600  # 默认1小时间隔
+                    )
+                    _heartbeat_manager.start()
+                    print("Heartbeat service started")
+                except Exception as e:
+                    print(f"警告: 启动心跳服务失败: {e}")
             
-            print(f"Starting ivry_cli model server and cloudflared tunnel for project at: {project_dir}")
-            print(f"Model ID: {model_id}")
-            print(f"Logs will be written to: {logs_dir}")
-            
-            # Start supervisor
-            options = ServerOptions()
-            options.configfile = str(supervisor_conf)
-            
-            if detached:
-                # Start supervisor in daemon mode
-                options.daemon = True
-                supervisord.main(args=["-c", str(supervisor_conf)])
-                
-                # Start heartbeat service if model_id is available
-                if model_id and model_id != "unknown":
-                    try:
-                        global _heartbeat_manager
-                        apikey = get_apikey()
-                        upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
-                        
-                        # Stop any existing heartbeat manager
-                        if _heartbeat_manager:
-                            _heartbeat_manager.stop()
-                        
-                        # Start new heartbeat manager
-                        _heartbeat_manager = HeartbeatManager(
-                            upload_url=upload_url,
-                            model_id=model_id,
-                            api_key=apikey,
-                            interval=3600  # 1 hour interval by default
-                        )
-                        _heartbeat_manager.start()
-                        print("Heartbeat service started")
-                    except Exception as e:
-                        print(f"Warning: Failed to start heartbeat service: {e}")
-                
-                return (f"Services started in detached mode with supervisor.\n"
-                    f"Supervisor PID file: {supervisor_pid_file}\n"
-                    f"To check status: ivry_cli supervisor_status\n"
-                    f"To control services: ivry_cli supervisor_control [start|stop|restart]\n"
-                    f"To view logs, check: {logs_dir}")
-            else:
-                # Start supervisor in foreground mode
-                print("Starting services in foreground mode with supervisor...")
-                print("Press Ctrl+C to stop all services")
-                
-                # Start supervisord
-                supervisord.main(args=["-n", "-c", str(supervisor_conf)])
-                
-                return "Services have been stopped."
+            return (f"Services started with PM2.\n"
+                f"To view status: ivry_cli pm2_status\n"
+                f"To control services: ivry_cli pm2_control [start|stop|restart]\n"
+                f"To view logs: ivry_cli pm2_logs\n"
+                f"To stop all services: ivry_cli stop_server")
         
+        except subprocess.CalledProcessError as e:
+            return f"使用PM2启动服务时出错: {str(e)}"
         except Exception as e:
-            return f"Error starting services with supervisor: {str(e)}"
+            return f"启动服务时发生错误: {str(e)}"
 
-    def stop_server(self, project_path: str = None):
+    def stop_server(self, project_path: str = None, force: bool = False):
         """
-        Stops all supervised ivry services.
+        Stop all ivry services managed by PM2.
         
         Args:
             project_path (str, optional): Path to the project directory. If not provided,
                                         uses the current working directory.
+            force (bool, optional): If True, forcibly stop all processes. Default is False.
         
         Returns:
             str: Status information about the stop operation
         """
         try:
-            import xmlrpc.client
-            from supervisor.xmlrpc import SupervisorTransport
-        except ImportError:
-            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
-        
-        # Determine project directory
-        if project_path:
-            project_dir = Path(project_path)
-        else:
-            project_dir = Path.cwd()
-        
-        supervisor_dir = project_dir / "supervisor"
-        supervisor_conf = supervisor_dir / "supervisord.conf"
-        supervisor_sock_file = supervisor_dir / "supervisor.sock"
-        supervisor_pid_file = supervisor_dir / "supervisord.pid"
-        
-        if not supervisor_conf.exists():
-            return f"Error: Supervisor configuration not found at {supervisor_conf}. No services to stop."
-        
-        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
-            return f"Error: Supervisor does not appear to be running. No active services found."
-        
-        try:
-            # Read PID file
-            try:
-                with open(supervisor_pid_file, "r") as f:
-                    pid = int(f.read().strip())
-            except (ValueError, IOError):
-                return "Error: Unable to read supervisor PID file. It might be corrupted."
+            # 确定项目目录
+            if project_path:
+                project_dir = Path(project_path)
+            else:
+                project_dir = Path.cwd()
             
-            # Check if process exists
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                return "No active supervisor process found. Cleaning up stale files."
+            # 停止心跳管理器
+            global _heartbeat_manager
+            if _heartbeat_manager:
+                _heartbeat_manager.stop()
+                _heartbeat_manager = None
+                print("Heartbeat service stopped")
             
-            # Connect to supervisor via Unix socket
+            # 使用PM2停止服务
+            import subprocess
+            
+            result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if "ivry_server" not in result.stdout and "cloudflared_tunnel" not in result.stdout:
+                return "No running ivry services found."
+            
             try:
-                transport = xmlrpc.client.ServerProxy(
-                    "http://127.0.0.1",
-                    transport=SupervisorTransport(None, None, str(supervisor_sock_file))
-                )
-                
-                # First get process info for reporting
-                process_info = transport.supervisor.getAllProcessInfo()
-                running_processes = [p['name'] for p in process_info if p['state'] == 20]  # 20 = RUNNING
-                
-                # Stop all processes
-                transport.supervisor.stopAllProcesses()
-                
-                # Shutdown supervisor itself
-                transport.supervisor.shutdown()
-                
-                # Give it a moment to shutdown
-                import time
-                time.sleep(2)
-                
-                # Check if supervisor is still running
-                try:
-                    os.kill(pid, 0)
-                    print(f"Supervisor process (PID: {pid}) is still running. Sending SIGTERM...")
-                    os.kill(pid, 15)  # SIGTERM
-                    time.sleep(1)
-                except OSError:
-                    # Process is gone, which is what we want
-                    pass
-                
-                # Clean up files if they still exist
-                if supervisor_sock_file.exists():
-                    supervisor_sock_file.unlink()
-                if supervisor_pid_file.exists():
-                    supervisor_pid_file.unlink()
-                
-                # Heartbeat manager stop
-                global _heartbeat_manager
-                if _heartbeat_manager:
-                    _heartbeat_manager.stop()
-                    _heartbeat_manager = None
-                    print("Heartbeat service stopped")
-                
-                if running_processes:
-                    return f"Successfully stopped services: {', '.join(running_processes)}"
+                # 停止并删除ivry_server
+                subprocess.run(["pm2", "delete", "ivry_server"], check=not force)
+            except subprocess.CalledProcessError:
+                if not force:
+                    return "停止ivry_server失败。尝试使用--force参数。"
+            
+            try:
+                # 停止并删除cloudflared_tunnel
+                subprocess.run(["pm2", "delete", "cloudflared_tunnel"], check=not force)
+            except subprocess.CalledProcessError:
+                if not force:
+                    return "停止cloudflared_tunnel失败。尝试使用--force参数。"
+            
+            # 保存PM2配置
+            subprocess.run(["pm2", "save"], check=False)
+            
+            # Verify processes are actually stopped by checking system processes
+            ps_result = subprocess.run(["ps", "aux"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            ivry_running = "ivry_cli start model" in ps_result.stdout
+            cloudflared_running = "cloudflared tunnel" in ps_result.stdout
+            
+            if ivry_running or cloudflared_running:
+                if force:
+                    # In force mode, attempt to kill processes directly
+                    self._force_kill_processes()
+                    return "All ivry services have been forcibly terminated."
                 else:
-                    return "Successfully stopped supervisor. No services were running."
-                
-            except Exception as e:
-                # If we can't stop cleanly via XMLRPC, try to kill the process
+                    return "Some ivry processes are still running. Use --force to terminate them."
+            
+            return "All ivry services have been successfully stopped."
+        
+        except FileNotFoundError:
+            return "错误: PM2未安装或未找到。请确保安装了PM2。"
+        except Exception as e:
+            if force:
+                # 在强制模式下尝试使用系统命令终止进程
                 try:
-                    os.kill(pid, 15)  # SIGTERM
-                    time.sleep(2)
-                    
-                    # Check if it's still running
-                    try:
-                        os.kill(pid, 0)
-                        os.kill(pid, 9)  # SIGKILL as last resort
-                        return f"Forcibly terminated supervisor process (PID: {pid})"
-                    except OSError:
-                        return f"Terminated supervisor process (PID: {pid})"
-                except OSError:
-                    return f"Failed to terminate supervisor process: {str(e)}"
-        
-        except Exception as e:
-            return f"Error stopping services: {str(e)}"
+                    self._force_kill_processes()
+                    return "已强制终止所有ivry相关进程。"
+                except Exception as kill_error:
+                    return f"错误: 无法停止服务: {str(e)}。强制终止也失败: {str(kill_error)}"
+            return f"错误: 停止服务时发生错误: {str(e)}"
 
-    def supervisor_status(self, project_path: str = None):
-        """
-        Displays the status of supervised ivry services.
+    def _force_kill_processes(self):
+        """尝试强制终止ivry相关进程"""
+        import subprocess
+        import os
+        import signal
         
-        Args:
-            project_path (str, optional): Path to the project directory. If not provided,
-                                        uses the current working directory.
-        
-        Returns:
-            str: Status information of supervised processes
-        """
-        try:
-            import xmlrpc.client
-            from supervisor.xmlrpc import SupervisorTransport
-        except ImportError:
-            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
-        
-        # Determine project directory
-        if project_path:
-            project_dir = Path(project_path)
-        else:
-            project_dir = Path.cwd()
-        
-        supervisor_dir = project_dir / "supervisor"
-        supervisor_conf = supervisor_dir / "supervisord.conf"
-        supervisor_sock_file = supervisor_dir / "supervisor.sock"
-        supervisor_pid_file = supervisor_dir / "supervisord.pid"
-        
-        if not supervisor_conf.exists():
-            return f"Error: Supervisor configuration not found at {supervisor_conf}"
-        
-        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
-            return f"Error: Supervisor does not appear to be running. No active services found."
-        
-        # Read PID file
-        try:
-            with open(supervisor_pid_file, "r") as f:
-                pid = int(f.read().strip())
-        except (ValueError, IOError):
-            return "Error: Unable to read supervisor PID file. It might be corrupted."
-        
-        # Check if process exists
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return "No active supervisor process found. Cleaning up stale files."
-        
-        try:
-            # Connect to supervisor via Unix socket
-            transport = xmlrpc.client.ServerProxy(
-                "http://127.0.0.1",
-                transport=SupervisorTransport(None, None, str(supervisor_sock_file))
-            )
-            
-            # Get process info
-            process_info = transport.supervisor.getAllProcessInfo()
-            
-            # Check if supervisor is actually running
-            if not process_info:
-                return "Supervisor is running but no processes are defined."
-            
-            # Format and return status information
-            status_info = f"{'PROCESS NAME':<20} {'STATUS':<10} {'PID':<8} {'UPTIME'}\n"
-            status_info += "-" * 60 + "\n"
-            
-            for process in process_info:
-                name = process['name']
-                state = process['statename']
-                pid = process['pid'] or "N/A"
-                uptime = "-"
-                if process.get('start'):
-                    from datetime import datetime
-                    start_time = datetime.fromtimestamp(process['start'])
-                    uptime = str(datetime.now() - start_time).split('.')[0]  # Remove microseconds
+        # 终止进程的辅助函数
+        def terminate_process(name):
+            try:
+                # 列出所有进程并找到匹配名称的进程
+                result = subprocess.run(["pgrep", "-f", name], stdout=subprocess.PIPE, text=True)
+                pids = [pid.strip() for pid in result.stdout.strip().split("\n") if pid.strip()]
                 
-                status_info += f"{name:<20} {state:<10} {pid:<8} {uptime}\n"
-            
-            # Add supervisor process itself
-            status_info += "-" * 60 + "\n"
-            status_info += f"{'supervisord':<20} {'RUNNING':<10} {pid:<8} N/A\n"
-            
-            return status_info
+                if pids:
+                    for pid in pids:
+                        try:
+                            os.kill(int(pid), signal.SIGTERM)
+                        except ProcessLookupError:
+                            continue
+                    print(f"已终止{name}进程，PID: {', '.join(pids)}")
+            except Exception as e:
+                print(f"停止{name}时出错: {e}")
         
-        except Exception as e:
-            return f"Error getting supervisor status: {str(e)}"
+        # 终止`ivry_cli`进程
+        terminate_process("ivry_cli start model")
+        
+        # 终止`cloudflared`进程
+        terminate_process("cloudflared tunnel")
+        
+        # 终止PM2进程
+        terminate_process("pm2")
+        
+        # 终止3009端口上的进程
+        def kill_process_by_port(port):
+            try:
+                result = subprocess.run(
+                    ["lsof", "-t", f"-i:{port}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                pids = [pid for pid in result.stdout.strip().split("\n") if pid]
+                
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        continue
+            except Exception:
+                pass
+        
+        # 终止3009端口上的进程
+        kill_process_by_port(3009)
 
-    def supervisor_control(self, command: str, process: str = "all", project_path: str = None):
+    def pm2_status(self, project_path: str = None):
         """
-        Controls supervised ivry services.
+        Display the status of ivry services managed by PM2.
         
         Args:
-            command (str): Control command ('start', 'stop', 'restart')
-            process (str, optional): Process to control ('ivry_server', 'cloudflared_tunnel', or 'all').
-                                    Default is 'all'.
             project_path (str, optional): Path to the project directory. If not provided,
                                         uses the current working directory.
         
         Returns:
-            str: Result of the control operation
+            str: Status information of PM2-managed processes
         """
         try:
-            import xmlrpc.client
-            from supervisor.xmlrpc import SupervisorTransport
-        except ImportError:
-            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+            # 确定项目目录
+            if project_path:
+                project_dir = Path(project_path)
+            else:
+                project_dir = Path.cwd()
+            
+            # 检查PM2是否已安装
+            import subprocess
+            result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            
+            if result.returncode != 0:
+                return "错误: 无法获取PM2状态。确保PM2已安装并正常运行。"
+            
+            # 格式化并返回状态信息
+            return f"PM2进程状态:\n\n{result.stdout}"
         
-        # Validate command
-        if command not in ["start", "stop", "restart"]:
-            return f"Error: Invalid command '{command}'. Use 'start', 'stop', or 'restart'."
+        except FileNotFoundError:
+            return "错误: PM2未安装或未找到。请确保安装了PM2。"
+        except Exception as e:
+            return f"获取PM2状态时出错: {str(e)}"
+
+    def pm2_control(self, command: str, process: str = "all", project_path: str = None):
+        """
+        控制PM2管理的ivry服务。
         
-        # Validate process
-        valid_processes = ["all", "ivry_server", "cloudflared_tunnel", "ivry_services"]
-        if process not in valid_processes:
-            return f"Error: Invalid process '{process}'. Valid options are: {', '.join(valid_processes)}"
+        参数:
+            command (str): 控制命令 ('start', 'stop', 'restart', 'reload')
+            process (str, optional): 要控制的进程 ('ivry_server', 'cloudflared_tunnel', 或 'all')。
+                                    默认为 'all'。
+            project_path (str, optional): 项目目录路径。如果未提供，使用当前工作目录。
         
-        # Determine project directory
-        if project_path:
-            project_dir = Path(project_path)
-        else:
-            project_dir = Path.cwd()
-        
-        supervisor_dir = project_dir / "supervisor"
-        supervisor_conf = supervisor_dir / "supervisord.conf"
-        supervisor_sock_file = supervisor_dir / "supervisor.sock"
-        supervisor_pid_file = supervisor_dir / "supervisord.pid"
-        
-        if not supervisor_conf.exists():
-            return f"Error: Supervisor configuration not found at {supervisor_conf}"
-        
-        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
-            return f"Error: Supervisor does not appear to be running. Start it first with 'ivry_cli run_server'."
-        
+        返回:
+            str: 控制操作的结果
+        """
         try:
-            # Read PID file
-            try:
-                with open(supervisor_pid_file, "r") as f:
-                    pid = int(f.read().strip())
-            except (ValueError, IOError):
-                return "Error: Unable to read supervisor PID file. It might be corrupted."
+            # 验证命令
+            if command not in ["start", "stop", "restart", "reload"]:
+                return f"错误: 无效的命令 '{command}'。使用 'start', 'stop', 'restart' 或 'reload'。"
             
-            # Check if process exists
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                return "No active supervisor process found. Start it first with 'ivry_cli run_server'."
+            # 验证进程
+            valid_processes = ["all", "ivry_server", "cloudflared_tunnel"]
+            if process not in valid_processes:
+                return f"错误: 无效的进程 '{process}'。有效选项: {', '.join(valid_processes)}"
             
-            # Connect to supervisor via Unix socket
-            transport = xmlrpc.client.ServerProxy(
-                "http://127.0.0.1",
-                transport=SupervisorTransport(None, None, str(supervisor_sock_file))
-            )
+            # 确定项目目录
+            if project_path:
+                project_dir = Path(project_path)
+            else:
+                project_dir = Path.cwd()
             
-            # Execute the command
-            result = ""
+            # 检查PM2是否已安装
+            import subprocess
+            
+            # 执行命令
             if process == "all":
                 if command == "start":
-                    transport.supervisor.startAllProcesses()
-                    result = "All processes started"
-                elif command == "stop":
-                    transport.supervisor.stopAllProcesses()
-                    result = "All processes stopped"
-                elif command == "restart":
-                    transport.supervisor.stopAllProcesses()
-                    time.sleep(1)  # Brief pause to ensure processes have time to stop
-                    transport.supervisor.startAllProcesses()
-                    result = "All processes restarted"
-            elif process == "ivry_services":
-                group_name = "ivry_services"
-                if command == "start":
-                    transport.supervisor.startProcessGroup(group_name)
-                    result = f"Process group '{group_name}' started"
-                elif command == "stop":
-                    transport.supervisor.stopProcessGroup(group_name)
-                    result = f"Process group '{group_name}' stopped"
-                elif command == "restart":
-                    transport.supervisor.stopProcessGroup(group_name)
-                    time.sleep(1)  # Brief pause to ensure processes have time to stop
-                    transport.supervisor.startProcessGroup(group_name)
-                    result = f"Process group '{group_name}' restarted"
+                    # 检查配置文件
+                    pm2_config_path = project_dir / "pm2_config.json"
+                    if not pm2_config_path.exists():
+                        return f"错误: 找不到PM2配置文件。请先运行 'ivry_cli run_server'。"
+                    
+                    result = subprocess.run(["pm2", "start", str(pm2_config_path)], 
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                else:
+                    result = subprocess.run(["pm2", command, "all"], 
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             else:
-                if command == "start":
-                    transport.supervisor.startProcess(process)
-                    result = f"Process '{process}' started"
-                elif command == "stop":
-                    transport.supervisor.stopProcess(process)
-                    result = f"Process '{process}' stopped"
-                elif command == "restart":
-                    transport.supervisor.stopProcess(process)
-                    time.sleep(1)  # Brief pause to ensure process has time to stop
-                    transport.supervisor.startProcess(process)
-                    result = f"Process '{process}' restarted"
+                result = subprocess.run(["pm2", command, process], 
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             
-            # Get updated status
-            process_info = transport.supervisor.getAllProcessInfo()
-            status_info = f"\nCurrent Status:\n"
-            status_info += f"{'PROCESS NAME':<20} {'STATUS':<10} {'PID':<8}\n"
-            status_info += "-" * 45 + "\n"
+            if result.returncode != 0:
+                return f"执行 'pm2 {command} {process}' 时出错:\n{result.stderr}"
             
-            for p in process_info:
-                name = p['name']
-                state = p['statename']
-                pid = p['pid'] or "N/A"
-                status_info += f"{name:<20} {state:<10} {pid:<8}\n"
+            # 保存PM2配置
+            subprocess.run(["pm2", "save"], check=False)
             
-            return f"{result}\n{status_info}"
+            # 获取更新后的状态
+            status_result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            
+            return f"命令 'pm2 {command} {process}' 执行成功。\n\n当前状态:\n{status_result.stdout}"
         
+        except FileNotFoundError:
+            return "错误: PM2未安装或未找到。请确保安装了PM2。"
         except Exception as e:
-            return f"Error controlling supervisor: {str(e)}"
+            return f"控制PM2时出错: {str(e)}"
 
+    def pm2_logs(self, process: str = "all", lines: int = 20, project_path: str = None):
+        """
+        显示PM2管理的ivry服务的日志。
+        
+        参数:
+            process (str, optional): 要查看日志的进程 ('ivry_server', 'cloudflared_tunnel', 或 'all')。
+                                    默认为 'all'。
+            lines (int, optional): 要显示的日志行数。默认为20。
+            project_path (str, optional): 项目目录路径。如果未提供，使用当前工作目录。
+        
+        返回:
+            str: 服务日志
+        """
+        try:
+            # 验证进程
+            valid_processes = ["all", "ivry_server", "cloudflared_tunnel"]
+            if process not in valid_processes:
+                return f"错误: 无效的进程 '{process}'。有效选项: {', '.join(valid_processes)}"
+            
+            # 确定项目目录
+            if project_path:
+                project_dir = Path(project_path)
+            else:
+                project_dir = Path.cwd()
+            
+            # 日志目录
+            logs_dir = project_dir / "logs"
+            if not logs_dir.exists():
+                return f"错误: 日志目录 '{logs_dir}' 不存在。"
+            
+            import subprocess
+            
+            if process == "all":
+                # 合并所有日志
+                ivry_log = logs_dir / "ivry_server.log"
+                cloudflared_log = logs_dir / "cloudflared.log"
+                
+                ivry_content = ""
+                if ivry_log.exists():
+                    result = subprocess.run(["tail", "-n", str(lines), str(ivry_log)], 
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    ivry_content = f"=== ivry_server日志 ===\n{result.stdout}\n\n"
+                
+                cloudflared_content = ""
+                if cloudflared_log.exists():
+                    result = subprocess.run(["tail", "-n", str(lines), str(cloudflared_log)], 
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    cloudflared_content = f"=== cloudflared_tunnel日志 ===\n{result.stdout}"
+                
+                return ivry_content + cloudflared_content
+            else:
+                # 特定进程的日志
+                log_file = logs_dir / f"{process}.log"
+                if not log_file.exists():
+                    return f"错误: 日志文件 '{log_file}' 不存在。"
+                
+                result = subprocess.run(["tail", "-n", str(lines), str(log_file)], 
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                
+                return f"=== {process}日志 (最近{lines}行) ===\n{result.stdout}"
+        
+        except FileNotFoundError as e:
+            return f"错误: 找不到所需的文件或命令: {str(e)}"
+        except Exception as e:
+            return f"获取日志时出错: {str(e)}"
 
 
 def main():
