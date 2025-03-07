@@ -42,7 +42,8 @@ def create_tunnel(identifier):
         },
     )
     res.raise_for_status()
+    print(res.content)
 
 if __name__ == "__main__":
     # create_hostname("identifier-1234")
-    create_tunnel("identifier-1234")
+    create_tunnel("app_1")

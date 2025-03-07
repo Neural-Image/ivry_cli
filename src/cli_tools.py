@@ -136,30 +136,31 @@ class Cli:
     def start_server(self):
         global _heartbeat_manager
         
-        try:
-            with open("tunnel_credential.json", "r") as f:
-                config = json.load(f)
-                model_id = config.get("TunnelName")
-        except (FileNotFoundError, json.JSONDecodeError):
-            model_id = None
+        # try:
+        #     with open("tunnel_credential.json", "r") as f:
+        #         config = json.load(f)
+        #         model_id = config.get("TunnelName")
+        # except (FileNotFoundError, json.JSONDecodeError):
+        #     model_id = None
+        model_id = None
             
         
         with open("client.log", "w") as log_file:
             p_cf = subprocess.Popen(
-                ["project-x", "start", "model",f"--upload-url={IVRY_URL}pc/client-api/upload"],
+                ["project-x", "start", "model",f"--upload-url=http://localhost:3000/api/cli/upload"],
                 # ["project-x", "start", "model", "--upload_url", ""],
                 stdout=log_file,
                 stderr=subprocess.STDOUT  # Redirect stderr to the same log file
             )
         print("client is running. Logs are being written to client.log.")
 
-        with open("cloudflare.log", "w") as log_file:
-            p_cf = subprocess.Popen(
-                ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
-                stdout=log_file,
-                stderr=subprocess.STDOUT  # Redirect stderr to the same log file
-            )
-        print("cloudflare is running. Logs are being written to cloudflare.log.")
+        # with open("cloudflare.log", "w") as log_file:
+        #     p_cf = subprocess.Popen(
+        #         ["cloudflared", "tunnel", "--config", "tunnel_config.json", "run"],
+        #         stdout=log_file,
+        #         stderr=subprocess.STDOUT  # Redirect stderr to the same log file
+        #     )
+        # print("cloudflare is running. Logs are being written to cloudflare.log.")
 
         try:
             if model_id:
@@ -258,7 +259,7 @@ class Cli:
                     args_list.append(f"--{key}")
                 else:
                     args_list.extend([f"--{key}", str(value)])  # Separate key and value
-            start_model_server(parse_args(args_list))
+            start_model_server_(parse_args(args_list))
             # start_model_server_()
         if server == "business":
             start_business_server()
