@@ -22,7 +22,7 @@ from find_comfyui_path import find_comfyui_path_by_port
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
 #IVRY_URL = "https://www.ivry.co/"
-IVRY_URL = "http://127.0.0.1:3000/"
+IVRY_URL = "https://www.lormul.org/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 _heartbeat_manager = None
@@ -344,7 +344,7 @@ class Cli:
                 return f"错误: {data.get('message', '发生未知错误')}"
             
             app_config = data.get("data", {})
-            local_name = data.get("name") + "_" + str(app_id)
+            local_name = "app_" + str(app_id)
             # 创建项目目录
             dest_path = Path.cwd() / str(local_name)
             if not dest_path.exists():
@@ -369,9 +369,9 @@ class Cli:
             comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
             # 根据配置数据创建必要的预测器文件
             system_name = platform.system().lower()
-
-            generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name)
-      
+            print("1")
+            generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
+            print("2")
             # 这部分取决于您的具体应用设计，可能需要根据实际情况调整
             source_path = "predict.py"  # 当前目录下的 predict.py
             destination_path = local_name + "/predict.py"  # 目标目录

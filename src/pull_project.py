@@ -47,11 +47,11 @@ def get_local_ip(port: Union[str, int]) -> str:
     except (subprocess.SubprocessError, subprocess.TimeoutExpired):
         return f"127.0.0.1:{port}"
 
-def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: str, os_system: str) -> str:
+def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: str, os_system: str, workflow_name: str) -> str:
     """生成predict.py文件"""
     print("start to generate predict.py")
     input_list = input_section["data"]["selectedNodes"].keys()
-    workflow_name = input_section["name"]   
+    workflow_name = workflow_name   
     workflow_api_json = input_section["data"]["json"]
     # 获取 selectedNodes
     selected_nodes = input_section["data"]["selectedNodes"]
@@ -76,10 +76,12 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     for index, i in enumerate(component_types):
         cur_type = ""
         if component_types[i] == "input":
-            if element_types[i] == "number":
+            if element_types[i] == "text":
+                cur_type = "str"
+            elif element_types[i] == "float":
                 cur_type = "float"
             else:
-                cur_type = "str"
+                cur_type = "int"
         elif component_types[i] == "textarea":
             cur_type = "str"
         elif component_types[i] == "slider":
@@ -95,11 +97,11 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
         cur_parameter = cur_parameter.replace("{parameter_type}", cur_type)
         input_parameter += cur_parameter
     print("input_parameter", input_parameter)
-        
+   
     
-    if workflow_name == "untitle":
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        workflow_name = f"workflow_{timestamp}"
+    # if workflow_name == "untitle":
+    #     timestamp = time.strftime("%Y%m%d_%H%M%S")
+    #     workflow_name = f"workflow_{timestamp}"
     
     
     if not os_system:
@@ -108,7 +110,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     if not dir_comfyui:
         return "Error: Please enter your comfyUI dir"
     
-  
+
     wsl_name = "Ubuntu"
     port_str = port_comfyui
     
@@ -160,7 +162,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
         
     
     logic_section = "".join(logic_sections)
-    
+    print("finish to generate predict.py")
     # 获取工作流文件的绝对路径
     workflow_path = Path(f"comfyui_workflows/{workflow_name}.json").resolve()
     with workflow_path.open("w", encoding="utf-8") as f:
@@ -172,6 +174,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     content = content.replace("{{workflow_dir}}", f"r'{workflow_path}'")
     content = content.replace("{{logic_section}}", logic_section)
     # 保存为 predict.py
+    print("finish to generate predict.py")
     with open("predict.py", "w") as predict_file:
         predict_file.write(content)
         
