@@ -1,10 +1,11 @@
 # ivry_cli Documentation
 
 ## 🔥 Updates
-- **2025/02/27**: ivry_cli pulling:
+- **2025/03/07**: Added new `list_apps` command to view all your applications
+- **2025/02/27**: ivry_cli pulling capabilities added
 - **2025/02/26**: WebUI updates:
   - Find ComfyUI information
-  - better UI
+  - Better UI experience
 - **2025/02/08**: WebUI updates:
   - Input type validation
   - Log monitor
@@ -33,7 +34,6 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
    ```
 2. Install the CLI:
    ```bash
-   cd ivry_cli
    pip install -e .
    ```
 
@@ -92,12 +92,15 @@ ivry_cli upload_app
 
 ---
 
-## Managing Your Model
+## Managing Your Models
 
-### Check Uploaded Models
+
+### List All Your Applications
+View all your applications with detailed information:
 ```bash
-ivry_cli list_models
+ivry_cli list_apps
 ```
+This displays ID, name, public status, state, and creation date for all your applications.
 
 ### Update an Existing Model
 If you update `predict.py` after uploading, you can update your model:
@@ -137,23 +140,12 @@ ivry_cli stop_server
 
 ---
 
-## Troubleshooting
-
-### WebSocket Issues
-If you encounter WebSocket errors when starting the server, try:
-```bash
-pip uninstall websockets
-pip install websocket-client
-```
-
----
-
-# Pulling an Existing Project
+## Pulling an Existing Project
 
 You can pull an existing project from the ivry platform using the project ID:
 
 ```bash
-ivry_cli pull_project --project_id {project_id} [--project_name {optional_local_name}]
+ivry_cli pull_project --project_id {project_id} [--project_name {optional_local_name}] [--comfyui_port {port_number}]
 ```
 
 This will:
@@ -168,8 +160,8 @@ This will:
 # Pull a project using its ID and use that ID as the local directory name
 ivry_cli pull_project --project_id abc123xyz
 
-# Pull a project and specify a custom local directory name
-ivry_cli pull_project --project_id abc123xyz --project_name my_awesome_project
+# Pull a project and specify a custom ComfyUI port
+ivry_cli pull_project --project_id abc123xyz --comfyui_port 8189
 ```
 
 After pulling a project, you can start it using:
@@ -179,17 +171,78 @@ cd {project_directory}
 ivry_cli start_server
 ```
 
+---
+
+## Finding ComfyUI Information
+
+To identify your ComfyUI installation path and port:
+
+```bash
+ivry_cli find_comfyUI
+```
+
+This will detect any running ComfyUI instances and display:
+- Process ID and name
+- Installation path
+- Listening port
+
+---
+
+## Additional Utilities
+
+### Parse predict.py
+Generate signature files from your predict.py:
+```bash
+ivry_cli parse_predict --predict_filename {path_to_predict.py}
+```
+
+### Upload Configuration
+Upload configuration details to the server:
+```bash
+ivry_cli upload_config
+```
+
+### Get Heartbeat Status
+Check the status of your application's heartbeat monitoring:
+```bash
+ivry_cli get_heartbeat_status
+```
+
+---
+
+## Troubleshooting
+
+### WebSocket Issues
+If you encounter WebSocket errors when starting the server, try:
+```bash
+pip uninstall websockets
+pip install websocket-client
+```
+
+### Connection Problems
+If you're having trouble connecting to the server, check:
+1. Your API key is valid and correctly entered
+2. Your network connection is stable
+3. The server is accessible from your location
+
+### Log Files
+Check these log files for troubleshooting:
+- `client.log`: Application runtime logs
+- `cloudflare.log`: CloudFlare tunnel logs
+
+---
 
 ## TODOs
 
-- [ ] Implement find comfyUI function in webui
 - [ ] Support web pull
-- [ ] wsl2 package
-- [ ] heartbeat sending 
+- [ ] WSL2 package
+- [ ] Heartbeat sending improvements
 
 
 ### Completed Tasks:
+✅ Find ComfyUI function in WebUI  
 ✅ Windows version support  
+✅ List applications command  
 ✅ Improved command-line options for `start_server`  
 ✅ Enhanced template code for ComfyUI  
 ✅ Cloudflare research & configuration validation  

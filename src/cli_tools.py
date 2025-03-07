@@ -398,5 +398,76 @@ class Cli:
             return f"意外错误: {str(e)}"
 
 
+    def list_apps(self):
+        """
+        Retrieves and displays a list of all applications for the current user.
+        
+        This function calls the '/api/cli/apps/list' endpoint to fetch all apps
+        associated with the user's API key and displays them in a formatted way.
+        
+        Returns:
+            str: A message indicating the result of the operation
+        """
+        try:
+            # Get the API key for authentication
+            apikey = get_apikey()
+            
+            # Set up request headers
+            headers = {
+                'X-API-KEY': str(apikey),
+                'Content-Type': 'application/json',
+            }
+            
+            # Construct the API URL
+            url = IVRY_URL + "api/cli/apps/list"
+            
+            # Make the request to retrieve all apps
+            print("Retrieving applications list...")
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            
+            # Parse the JSON response
+            json_data = response.json()
+            # Check if the request was successful
+            if json_data.get("success") == True:
+                apps = json_data.get("apps", [])
+                
+                if not apps:
+                    return "No applications found for your account."
+                
+                # Format and display the apps information
+                print("Applications retrieved successfully!\n")
+                print("=" * 80)
+                print(f"{'ID':<15} {'Name':<25} {'isPublic':<15} {'state':<15} {'Created Date'}")
+                print("-" * 80)
+                
+                for app in apps:
+                    app_id = app.get("id", "N/A")
+                    name = app.get("name", "N/A")
+                    app_type = app.get("isPublic", "N/A")
+                    status = app.get("state", "N/A")
+                    created_date = app.get("createdAt", "N/A")
+                    
+                    print(f"{app_id:<15} {name:<25} {app_type:<15} {status:<15} {created_date}")
+                
+                print("=" * 80)
+                return f"Retrieved {len(apps)} applications."
+            else:
+                return f"Error: {json_data.get('message', 'An unknown error occurred')}"
+        
+        except requests.exceptions.HTTPError as e:
+            return f"HTTP Error: {str(e)}"
+        except requests.exceptions.ConnectionError:
+            return "Connection Error: Unable to connect to the server. Please check your network connection."
+        except requests.exceptions.Timeout:
+            return "Timeout Error: The request timed out. Please try again later."
+        except requests.exceptions.RequestException as e:
+            return f"Request Error: {str(e)}"
+        except json.JSONDecodeError:
+            return "Error: Invalid response received from the server (not valid JSON)"
+        except Exception as e:
+            return f"Unexpected error: {str(e)}"
+
+
 def main():
     fire.Fire(Cli)
