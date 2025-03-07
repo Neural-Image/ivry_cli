@@ -328,7 +328,8 @@ class Cli:
             'X-API-KEY': str(apikey),
             'Content-Type': 'application/json',
         }
-        
+        project_dir = Path("ivry_project/comfyUI_project")
+        project_dir.mkdir(parents=True, exist_ok=True)
         try:
             # 构建API URL
             url = f"{IVRY_URL}api/cli/app/{app_id}"
@@ -345,8 +346,9 @@ class Cli:
             
             app_config = data.get("data", {})
             local_name = "app_" + str(app_id)
+            project_path = project_dir / local_name
             # 创建项目目录
-            dest_path = Path.cwd() / str(local_name)
+            dest_path = Path.cwd() / str(project_path)
             if not dest_path.exists():
                 dest_path.mkdir(parents=True, exist_ok=True)
                 print(f"目录 {dest_path} 已创建。")
@@ -354,16 +356,18 @@ class Cli:
                 print(f"目录 {dest_path} 已存在。")
             
             # 保存配置数据为JSON
-            if app_config:
-                with open(dest_path / "app_config.json", "w", encoding="utf-8") as f:
-                    json.dump(app_config, f, indent=4, ensure_ascii=False)
+            tunnel_config = data["tunnelCfg"]["config"]
+            tunnel_credential = data["tunnelCfg"]["credential"]
+            
+            
+            if tunnel_config:
+                with open(project_path / "tunnel_config.json", "w", encoding="utf-8") as f:
+                    json.dump(tunnel_config, f, indent=4, ensure_ascii=False)
                 print(f"app_config.json 已保存到 {dest_path}")
             
-            # 如果配置中包含隧道配置，单独保存
-            tunnel_config = app_config.get("tunnelCfg", {})
-            if tunnel_config:
-                with open(dest_path / "tunnel_config.json", "w", encoding="utf-8") as f:
-                    json.dump(tunnel_config, f, indent=4, ensure_ascii=False)
+            if tunnel_credential:
+                with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
+                    json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json 已保存到 {dest_path}")
             
             comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
@@ -374,9 +378,9 @@ class Cli:
             print("2")
             # 这部分取决于您的具体应用设计，可能需要根据实际情况调整
             source_path = "predict.py"  # 当前目录下的 predict.py
-            destination_path = local_name + "/predict.py"  # 目标目录
+            destination_path = str(project_path) + "/predict.py"  # 目标目录
             shutil.move(source_path, destination_path)
-            shutil.copy("src/templates/cog.yaml", local_name + "/cog.yaml")
+            shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
             
             return f"应用 {app_id} 已成功拉取到 {local_name}/ 目录"
             

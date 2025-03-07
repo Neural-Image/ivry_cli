@@ -66,9 +66,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
         node_name: node_data["data"].get("type", "N/A")
         for node_name, node_data in selected_nodes.items()
     }
-    print("input_list", input_list)
-    print("component_types", component_types) 
-    print("element_types", element_types)
+    
     
     input_parameter = ""
     parameter_template = "{parameter_name}: {parameter_type} = Input(description=''),\n                "
