@@ -23,7 +23,13 @@ dependencies = [
   "pillow",
   "fire",
   "psutil>=5.8,<6",  # 添加 psutil，确保兼容较新版本
-  "websocket-client>=1.0,<2"  # ✅ 添加 websocket-client
+  "websocket-client>=1.0,<2",  # websocket-client
+]
+
+[project.optional-dependencies]
+supervisor = [
+  "supervisor>=4.2.5",
+  "xmlrpc>=1.0.1",
 ]
 
 [tool.setuptools]

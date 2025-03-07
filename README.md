@@ -1,6 +1,7 @@
 # ivry_cli Documentation
 
 ## 🔥 Updates
+- **2025/03/07**: Added new `run_server` command with background processing options
 - **2025/03/07**: Added new `list_apps` command to view all your applications
 - **2025/02/27**: ivry_cli pulling capabilities added
 - **2025/02/26**: WebUI updates:
@@ -94,6 +95,10 @@ ivry_cli upload_app
 
 ## Managing Your Models
 
+### Check Uploaded Models
+```bash
+ivry_cli list_models
+```
 
 ### List All Your Applications
 View all your applications with detailed information:
@@ -117,25 +122,74 @@ ivry_cli update_app --model_id {model_id}
 
 ## Hosting Your Project
 
-### Start the Server
-#### Linux:
+### New: Unified Server Management
+
+Start both the ivry_cli model server and cloudflared tunnel with a single command:
+
 ```bash
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-dpkg -i cloudflared-linux-amd64.deb
-```
-#### macOS:
-```bash
-brew install cloudflare/cloudflare/cloudflared
-```
-#### Start the Project:
-```bash
-cd {project_name}
-ivry_cli start_server
+ivry_cli run_server [OPTIONS]
 ```
 
-### Stop the Server
+#### Options:
+- `--project_path PATH`: Path to your project directory (default: current directory)
+- `--detached`: Run with supervisor in daemon mode (requires supervisor package)
+- `--background`: Run in background without supervisor
+- `--force`: Override and restart even if services are already running
+
+#### Examples:
+
 ```bash
-ivry_cli stop_server
+# Start in foreground mode (blocks terminal)
+cd my_project
+ivry_cli run_server
+
+# Start in background mode (frees terminal)
+ivry_cli run_server --background
+
+# Start in detached mode with supervisor (requires supervisor package)
+ivry_cli run_server --detached
+
+# Force restart if already running
+ivry_cli run_server --force
+
+# Specify a different project path
+ivry_cli run_server --project_path /path/to/my_project --background
+```
+
+### Stopping the Server
+
+```bash
+# Stop services started with supervisor
+ivry_cli stop_server [--project_path PATH]
+
+# For background mode without supervisor, use
+ivry_cli stop_server --background [--project_path PATH]
+```
+
+### Process Monitoring with Supervisor
+
+If you've installed the supervisor package, you can use these commands:
+
+```bash
+# Check status of running services
+ivry_cli supervisor_status [--project_path PATH]
+
+# Control specific services
+ivry_cli supervisor_control {start|stop|restart} [--process {all|ivry_server|cloudflared_tunnel}] [--project_path PATH]
+```
+
+### Traditional Method (Still Supported)
+
+If you prefer to start the services separately:
+
+```bash
+# Start the ivry_cli model server
+cd {project_name}
+ivry_cli start model --upload-url=https://www.lormul.org/pc/client-api/upload
+
+# In another terminal, start the cloudflared tunnel
+cd {project_name}
+cloudflared tunnel --config tunnel_config.json run
 ```
 
 ---
@@ -153,23 +207,6 @@ This will:
 2. Create a local directory for the project
 3. Create all necessary files (`predict.py`, `predict_signature.json`, etc.)
 4. Set up CloudFlare tunnel configuration
-
-### Examples:
-
-```bash
-# Pull a project using its ID and use that ID as the local directory name
-ivry_cli pull_project --project_id abc123xyz
-
-# Pull a project and specify a custom ComfyUI port
-ivry_cli pull_project --project_id abc123xyz --comfyui_port 8189
-```
-
-After pulling a project, you can start it using:
-
-```bash
-cd {project_directory}
-ivry_cli start_server
-```
 
 ---
 
@@ -227,8 +264,22 @@ If you're having trouble connecting to the server, check:
 
 ### Log Files
 Check these log files for troubleshooting:
-- `client.log`: Application runtime logs
-- `cloudflare.log`: CloudFlare tunnel logs
+- `logs/ivry_server.log`: Application runtime logs
+- `logs/cloudflared.log`: CloudFlare tunnel logs
+- `logs/supervisord.log`: Supervisor logs (if using supervisor)
+
+### Processes Won't Stop
+If you're having trouble stopping processes:
+```bash
+# For supervisor-managed processes
+ivry_cli stop_server --force
+
+# For background processes
+ps aux | grep ivry_cli
+ps aux | grep cloudflared
+# Then use the PIDs to terminate them
+kill <PID>
+```
 
 ---
 
@@ -240,10 +291,11 @@ Check these log files for troubleshooting:
 
 
 ### Completed Tasks:
+✅ Background running mode  
 ✅ Find ComfyUI function in WebUI  
 ✅ Windows version support  
 ✅ List applications command  
-✅ Improved command-line options for `start_server`  
+✅ Improved command-line options for `run_server`  
 ✅ Enhanced template code for ComfyUI  
 ✅ Cloudflare research & configuration validation  
 ✅ `ivry_cli stop` command  

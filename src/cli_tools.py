@@ -18,6 +18,14 @@ from heartbeat import HeartbeatManager
 from websocket_comfyui import create_predict
 from pull_project import generate_predict_file
 from find_comfyui_path import find_comfyui_path_by_port
+try:
+    import supervisor.supervisord
+    import supervisor.options
+    import supervisor.xmlrpc
+    SUPERVISOR_AVAILABLE = True
+except ImportError:
+    SUPERVISOR_AVAILABLE = False
+
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
@@ -467,6 +475,583 @@ class Cli:
             return "Error: Invalid response received from the server (not valid JSON)"
         except Exception as e:
             return f"Unexpected error: {str(e)}"
+
+
+    def run_server(self, project_path: str = None, detached: bool = False, force: bool = False):
+        """
+        Starts both the ivry_cli model server and cloudflared tunnel in a single command
+        with supervisor process monitoring.
+        
+        This function combines the functionalities of starting the ivry_cli model server
+        and the cloudflared tunnel, using supervisor to monitor and manage the processes.
+        
+        Args:
+            project_path (str, optional): Path to the project directory. If not provided,
+                                        uses the current working directory.
+            detached (bool, optional): If True, runs the servers in detached mode (background).
+                                    Default is False.
+            force (bool, optional): If True, forcibly restart services even if they're already running.
+                                Default is False.
+        
+        Returns:
+            str: A message indicating the result of the operation
+        """
+        
+
+        if not SUPERVISOR_AVAILABLE:
+            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+        
+ 
+        try:
+            # Try to import supervisor
+            import supervisor.supervisord as supervisord
+            from supervisor.options import ServerOptions
+            from supervisor.xmlrpc import SupervisorTransport
+            import xmlrpc.client
+            import socket
+        except ImportError:
+            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+        
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path)
+        else:
+            project_dir = Path.cwd()
+        
+        # Verify project directory exists and contains required files
+        if not project_dir.exists():
+            return f"Error: Project directory '{project_dir}' does not exist."
+        
+        tunnel_config = project_dir / "tunnel_config.json"
+        if not tunnel_config.exists():
+            return f"Error: Could not find tunnel_config.json in '{project_dir}'. Make sure this is a valid ivry project directory."
+        
+        # Create supervisor directory if it doesn't exist
+        supervisor_dir = project_dir / "supervisor"
+        supervisor_dir.mkdir(exist_ok=True)
+        
+        # Create logs directory if it doesn't exist
+        logs_dir = project_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+        
+        # Define supervisor files
+        supervisor_conf = supervisor_dir / "supervisord.conf"
+        supervisor_log_file = (logs_dir / "supervisord.log").resolve()
+        supervisor_pid_file = (supervisor_dir / "supervisord.pid").resolve()
+        supervisor_sock_file = (supervisor_dir / "supervisor.sock").resolve()
+        
+        # Check for already running supervisor instance
+        if supervisor_pid_file.exists() and not force:
+            try:
+                # Read PID file
+                with open(supervisor_pid_file, "r") as f:
+                    pid = int(f.read().strip())
+                    
+                # Check if process exists
+                try:
+                    os.kill(pid, 0)  # Signal 0 only checks if process exists, doesn't terminate it
+                    # Process exists, try to connect to the XMLRPC interface
+                    try:
+                        transport = xmlrpc.client.ServerProxy(
+                            "http://127.0.0.1",
+                            transport=SupervisorTransport(None, None, str(supervisor_sock_file))
+                        )
+                        # Get process info to verify connection works
+                        process_info = transport.supervisor.getAllProcessInfo()
+                        
+                        return (f"A supervisor instance is already running (PID: {pid}).\n"
+                            f"To check status: ivry_cli supervisor_status\n"
+                            f"To restart: ivry_cli supervisor_control restart\n"
+                            f"To force start a new instance: ivry_cli run_server --force")
+                    except Exception:
+                        # Can't connect to XMLRPC, supervisor might be in bad state
+                        print(f"Supervisor process is running but XMLRPC interface is not responding.")
+                        if force:
+                            print("Force flag is set, terminating existing process...")
+                            try:
+                                os.kill(pid, 15)  # SIGTERM
+                                import time
+                                time.sleep(2)  # Give it time to terminate
+                            except OSError:
+                                pass
+                        else:
+                            return (f"Supervisor process (PID: {pid}) appears to be in a bad state.\n"
+                                f"Use --force to terminate it and start a new instance.")
+                except OSError:
+                    # Process doesn't exist, clean up PID file
+                    supervisor_pid_file.unlink()
+                    print(f"Removed stale PID file from previous instance")
+            except (ValueError, IOError) as e:
+                # Invalid PID file format or can't read it
+                supervisor_pid_file.unlink()
+                print(f"Removed invalid PID file: {e}")
+        
+        # Check if the sock file exists and remove if needed
+        if supervisor_sock_file.exists():
+            try:
+                supervisor_sock_file.unlink()
+                print(f"Removed stale socket file from previous instance")
+            except OSError as e:
+                print(f"Warning: Could not remove stale socket file: {e}")
+        
+        # Check if ivry server port is already in use
+        def check_port(port):
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(('127.0.0.1', port))
+                s.close()
+                return False  # Port is free
+            except socket.error:
+                return True  # Port is in use
+        
+        # ivry server typically uses port 3009
+        if check_port(3009):
+            print("Warning: Port 3009 is already in use. This may cause conflicts with the ivry server.")
+            if not force:
+                return ("Port 3009 is already in use, which will prevent ivry_server from starting.\n"
+                    "Please stop any existing ivry_server instances first or use --force to attempt restart.")
+        
+        try:
+            # Get model_id from tunnel config if possible
+            try:
+                with open(tunnel_config, "r") as f:
+                    config = json.load(f)
+                    model_id = config.get("tunnel") or "unknown"
+            except (json.JSONDecodeError, FileNotFoundError):
+                model_id = "unknown"
+            
+            # Absolute paths for log files
+            ivry_log_file = (logs_dir / "ivry_server.log").resolve()
+            cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
+            
+            # Create supervisor configuration
+            supervisor_config = f"""[unix_http_server]
+                                    file={supervisor_sock_file}
+                                    chmod=0700
+
+                                    [supervisord]
+                                    logfile={supervisor_log_file}
+                                    pidfile={supervisor_pid_file}
+                                    childlogdir={logs_dir}
+                                    directory={project_dir}
+
+                                    [rpcinterface:supervisor]
+                                    supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+                                    [supervisorctl]
+                                    serverurl=unix://{supervisor_sock_file}
+
+                                    [program:ivry_server]
+                                    command=ivry_cli start model --upload-url={IVRY_URL}pc/client-api/upload
+                                    directory={project_dir}
+                                    autostart=true
+                                    autorestart=true
+                                    redirect_stderr=true
+                                    stdout_logfile={ivry_log_file}
+                                    stderr_logfile={ivry_log_file}
+                                    stopasgroup=true
+                                    killasgroup=true
+                                    priority=1
+
+                                    [program:cloudflared_tunnel]
+                                    command=cloudflared tunnel --config tunnel_config.json run
+                                    directory={project_dir}
+                                    autostart=true
+                                    autorestart=true
+                                    redirect_stderr=true
+                                    stdout_logfile={cloudflared_log_file}
+                                    stderr_logfile={cloudflared_log_file}
+                                    stopasgroup=true
+                                    killasgroup=true
+                                    priority=2
+
+                                    [group:ivry_services]
+                                    programs=ivry_server,cloudflared_tunnel
+                                    """
+
+            # Write supervisor configuration
+            with open(supervisor_conf, "w") as f:
+                f.write(supervisor_config)
+            
+            print(f"Starting ivry_cli model server and cloudflared tunnel for project at: {project_dir}")
+            print(f"Model ID: {model_id}")
+            print(f"Logs will be written to: {logs_dir}")
+            
+            # Start supervisor
+            options = ServerOptions()
+            options.configfile = str(supervisor_conf)
+            
+            if detached:
+                # Start supervisor in daemon mode
+                options.daemon = True
+                supervisord.main(args=["-c", str(supervisor_conf)])
+                
+                # Start heartbeat service if model_id is available
+                if model_id and model_id != "unknown":
+                    try:
+                        global _heartbeat_manager
+                        apikey = get_apikey()
+                        upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
+                        
+                        # Stop any existing heartbeat manager
+                        if _heartbeat_manager:
+                            _heartbeat_manager.stop()
+                        
+                        # Start new heartbeat manager
+                        _heartbeat_manager = HeartbeatManager(
+                            upload_url=upload_url,
+                            model_id=model_id,
+                            api_key=apikey,
+                            interval=3600  # 1 hour interval by default
+                        )
+                        _heartbeat_manager.start()
+                        print("Heartbeat service started")
+                    except Exception as e:
+                        print(f"Warning: Failed to start heartbeat service: {e}")
+                
+                return (f"Services started in detached mode with supervisor.\n"
+                    f"Supervisor PID file: {supervisor_pid_file}\n"
+                    f"To check status: ivry_cli supervisor_status\n"
+                    f"To control services: ivry_cli supervisor_control [start|stop|restart]\n"
+                    f"To view logs, check: {logs_dir}")
+            else:
+                # Start supervisor in foreground mode
+                print("Starting services in foreground mode with supervisor...")
+                print("Press Ctrl+C to stop all services")
+                
+                # Start supervisord
+                supervisord.main(args=["-n", "-c", str(supervisor_conf)])
+                
+                return "Services have been stopped."
+        
+        except Exception as e:
+            return f"Error starting services with supervisor: {str(e)}"
+
+    def stop_server(self, project_path: str = None):
+        """
+        Stops all supervised ivry services.
+        
+        Args:
+            project_path (str, optional): Path to the project directory. If not provided,
+                                        uses the current working directory.
+        
+        Returns:
+            str: Status information about the stop operation
+        """
+        try:
+            import xmlrpc.client
+            from supervisor.xmlrpc import SupervisorTransport
+        except ImportError:
+            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+        
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path)
+        else:
+            project_dir = Path.cwd()
+        
+        supervisor_dir = project_dir / "supervisor"
+        supervisor_conf = supervisor_dir / "supervisord.conf"
+        supervisor_sock_file = supervisor_dir / "supervisor.sock"
+        supervisor_pid_file = supervisor_dir / "supervisord.pid"
+        
+        if not supervisor_conf.exists():
+            return f"Error: Supervisor configuration not found at {supervisor_conf}. No services to stop."
+        
+        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
+            return f"Error: Supervisor does not appear to be running. No active services found."
+        
+        try:
+            # Read PID file
+            try:
+                with open(supervisor_pid_file, "r") as f:
+                    pid = int(f.read().strip())
+            except (ValueError, IOError):
+                return "Error: Unable to read supervisor PID file. It might be corrupted."
+            
+            # Check if process exists
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                return "No active supervisor process found. Cleaning up stale files."
+            
+            # Connect to supervisor via Unix socket
+            try:
+                transport = xmlrpc.client.ServerProxy(
+                    "http://127.0.0.1",
+                    transport=SupervisorTransport(None, None, str(supervisor_sock_file))
+                )
+                
+                # First get process info for reporting
+                process_info = transport.supervisor.getAllProcessInfo()
+                running_processes = [p['name'] for p in process_info if p['state'] == 20]  # 20 = RUNNING
+                
+                # Stop all processes
+                transport.supervisor.stopAllProcesses()
+                
+                # Shutdown supervisor itself
+                transport.supervisor.shutdown()
+                
+                # Give it a moment to shutdown
+                import time
+                time.sleep(2)
+                
+                # Check if supervisor is still running
+                try:
+                    os.kill(pid, 0)
+                    print(f"Supervisor process (PID: {pid}) is still running. Sending SIGTERM...")
+                    os.kill(pid, 15)  # SIGTERM
+                    time.sleep(1)
+                except OSError:
+                    # Process is gone, which is what we want
+                    pass
+                
+                # Clean up files if they still exist
+                if supervisor_sock_file.exists():
+                    supervisor_sock_file.unlink()
+                if supervisor_pid_file.exists():
+                    supervisor_pid_file.unlink()
+                
+                # Heartbeat manager stop
+                global _heartbeat_manager
+                if _heartbeat_manager:
+                    _heartbeat_manager.stop()
+                    _heartbeat_manager = None
+                    print("Heartbeat service stopped")
+                
+                if running_processes:
+                    return f"Successfully stopped services: {', '.join(running_processes)}"
+                else:
+                    return "Successfully stopped supervisor. No services were running."
+                
+            except Exception as e:
+                # If we can't stop cleanly via XMLRPC, try to kill the process
+                try:
+                    os.kill(pid, 15)  # SIGTERM
+                    time.sleep(2)
+                    
+                    # Check if it's still running
+                    try:
+                        os.kill(pid, 0)
+                        os.kill(pid, 9)  # SIGKILL as last resort
+                        return f"Forcibly terminated supervisor process (PID: {pid})"
+                    except OSError:
+                        return f"Terminated supervisor process (PID: {pid})"
+                except OSError:
+                    return f"Failed to terminate supervisor process: {str(e)}"
+        
+        except Exception as e:
+            return f"Error stopping services: {str(e)}"
+
+    def supervisor_status(self, project_path: str = None):
+        """
+        Displays the status of supervised ivry services.
+        
+        Args:
+            project_path (str, optional): Path to the project directory. If not provided,
+                                        uses the current working directory.
+        
+        Returns:
+            str: Status information of supervised processes
+        """
+        try:
+            import xmlrpc.client
+            from supervisor.xmlrpc import SupervisorTransport
+        except ImportError:
+            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+        
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path)
+        else:
+            project_dir = Path.cwd()
+        
+        supervisor_dir = project_dir / "supervisor"
+        supervisor_conf = supervisor_dir / "supervisord.conf"
+        supervisor_sock_file = supervisor_dir / "supervisor.sock"
+        supervisor_pid_file = supervisor_dir / "supervisord.pid"
+        
+        if not supervisor_conf.exists():
+            return f"Error: Supervisor configuration not found at {supervisor_conf}"
+        
+        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
+            return f"Error: Supervisor does not appear to be running. No active services found."
+        
+        # Read PID file
+        try:
+            with open(supervisor_pid_file, "r") as f:
+                pid = int(f.read().strip())
+        except (ValueError, IOError):
+            return "Error: Unable to read supervisor PID file. It might be corrupted."
+        
+        # Check if process exists
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return "No active supervisor process found. Cleaning up stale files."
+        
+        try:
+            # Connect to supervisor via Unix socket
+            transport = xmlrpc.client.ServerProxy(
+                "http://127.0.0.1",
+                transport=SupervisorTransport(None, None, str(supervisor_sock_file))
+            )
+            
+            # Get process info
+            process_info = transport.supervisor.getAllProcessInfo()
+            
+            # Check if supervisor is actually running
+            if not process_info:
+                return "Supervisor is running but no processes are defined."
+            
+            # Format and return status information
+            status_info = f"{'PROCESS NAME':<20} {'STATUS':<10} {'PID':<8} {'UPTIME'}\n"
+            status_info += "-" * 60 + "\n"
+            
+            for process in process_info:
+                name = process['name']
+                state = process['statename']
+                pid = process['pid'] or "N/A"
+                uptime = "-"
+                if process.get('start'):
+                    from datetime import datetime
+                    start_time = datetime.fromtimestamp(process['start'])
+                    uptime = str(datetime.now() - start_time).split('.')[0]  # Remove microseconds
+                
+                status_info += f"{name:<20} {state:<10} {pid:<8} {uptime}\n"
+            
+            # Add supervisor process itself
+            status_info += "-" * 60 + "\n"
+            status_info += f"{'supervisord':<20} {'RUNNING':<10} {pid:<8} N/A\n"
+            
+            return status_info
+        
+        except Exception as e:
+            return f"Error getting supervisor status: {str(e)}"
+
+    def supervisor_control(self, command: str, process: str = "all", project_path: str = None):
+        """
+        Controls supervised ivry services.
+        
+        Args:
+            command (str): Control command ('start', 'stop', 'restart')
+            process (str, optional): Process to control ('ivry_server', 'cloudflared_tunnel', or 'all').
+                                    Default is 'all'.
+            project_path (str, optional): Path to the project directory. If not provided,
+                                        uses the current working directory.
+        
+        Returns:
+            str: Result of the control operation
+        """
+        try:
+            import xmlrpc.client
+            from supervisor.xmlrpc import SupervisorTransport
+        except ImportError:
+            return "Error: The supervisor package is not installed. Please install it with: pip install supervisor"
+        
+        # Validate command
+        if command not in ["start", "stop", "restart"]:
+            return f"Error: Invalid command '{command}'. Use 'start', 'stop', or 'restart'."
+        
+        # Validate process
+        valid_processes = ["all", "ivry_server", "cloudflared_tunnel", "ivry_services"]
+        if process not in valid_processes:
+            return f"Error: Invalid process '{process}'. Valid options are: {', '.join(valid_processes)}"
+        
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path)
+        else:
+            project_dir = Path.cwd()
+        
+        supervisor_dir = project_dir / "supervisor"
+        supervisor_conf = supervisor_dir / "supervisord.conf"
+        supervisor_sock_file = supervisor_dir / "supervisor.sock"
+        supervisor_pid_file = supervisor_dir / "supervisord.pid"
+        
+        if not supervisor_conf.exists():
+            return f"Error: Supervisor configuration not found at {supervisor_conf}"
+        
+        if not supervisor_sock_file.exists() or not supervisor_pid_file.exists():
+            return f"Error: Supervisor does not appear to be running. Start it first with 'ivry_cli run_server'."
+        
+        try:
+            # Read PID file
+            try:
+                with open(supervisor_pid_file, "r") as f:
+                    pid = int(f.read().strip())
+            except (ValueError, IOError):
+                return "Error: Unable to read supervisor PID file. It might be corrupted."
+            
+            # Check if process exists
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                return "No active supervisor process found. Start it first with 'ivry_cli run_server'."
+            
+            # Connect to supervisor via Unix socket
+            transport = xmlrpc.client.ServerProxy(
+                "http://127.0.0.1",
+                transport=SupervisorTransport(None, None, str(supervisor_sock_file))
+            )
+            
+            # Execute the command
+            result = ""
+            if process == "all":
+                if command == "start":
+                    transport.supervisor.startAllProcesses()
+                    result = "All processes started"
+                elif command == "stop":
+                    transport.supervisor.stopAllProcesses()
+                    result = "All processes stopped"
+                elif command == "restart":
+                    transport.supervisor.stopAllProcesses()
+                    time.sleep(1)  # Brief pause to ensure processes have time to stop
+                    transport.supervisor.startAllProcesses()
+                    result = "All processes restarted"
+            elif process == "ivry_services":
+                group_name = "ivry_services"
+                if command == "start":
+                    transport.supervisor.startProcessGroup(group_name)
+                    result = f"Process group '{group_name}' started"
+                elif command == "stop":
+                    transport.supervisor.stopProcessGroup(group_name)
+                    result = f"Process group '{group_name}' stopped"
+                elif command == "restart":
+                    transport.supervisor.stopProcessGroup(group_name)
+                    time.sleep(1)  # Brief pause to ensure processes have time to stop
+                    transport.supervisor.startProcessGroup(group_name)
+                    result = f"Process group '{group_name}' restarted"
+            else:
+                if command == "start":
+                    transport.supervisor.startProcess(process)
+                    result = f"Process '{process}' started"
+                elif command == "stop":
+                    transport.supervisor.stopProcess(process)
+                    result = f"Process '{process}' stopped"
+                elif command == "restart":
+                    transport.supervisor.stopProcess(process)
+                    time.sleep(1)  # Brief pause to ensure process has time to stop
+                    transport.supervisor.startProcess(process)
+                    result = f"Process '{process}' restarted"
+            
+            # Get updated status
+            process_info = transport.supervisor.getAllProcessInfo()
+            status_info = f"\nCurrent Status:\n"
+            status_info += f"{'PROCESS NAME':<20} {'STATUS':<10} {'PID':<8}\n"
+            status_info += "-" * 45 + "\n"
+            
+            for p in process_info:
+                name = p['name']
+                state = p['statename']
+                pid = p['pid'] or "N/A"
+                status_info += f"{name:<20} {state:<10} {pid:<8}\n"
+            
+            return f"{result}\n{status_info}"
+        
+        except Exception as e:
+            return f"Error controlling supervisor: {str(e)}"
+
 
 
 def main():
