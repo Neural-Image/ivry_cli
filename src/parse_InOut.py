@@ -9,8 +9,12 @@ def clean_quotes(value):
         return value[1:-1]  # Remove surrounding single quotes
     return value
 
+def recoverType(data_type, val_dict):
+    if(data_type in ["str", "Path"]): return {**val_dict, **({"max_length": int(val_dict["max_length"])} if "max_length" in val_dict else {})}
+    converter = int if data_type == "int" else float
+    return {k: converter(v) for k, v in val_dict.items()}
 
-def parse_predict(predict_filename, save_type='yaml'):
+def parse_predict(predict_filename, save_type='json'):
     with open(predict_filename, encoding="utf-8") as file:
         source_code = file.read()
 
@@ -55,12 +59,13 @@ def parse_predict(predict_filename, save_type='yaml'):
     # print("inputs:", inputs)
     # print("outputs:", output_type)
     # print("validations:", validation_rules)
+    # import pdb; pdb.set_trace()
 
     data = {
-        "inputs": [ {"name": inp[0], "type": inp[1], "validation": val} for inp, val in zip(inputs, validation_rules)],
+        "inputs": [ {"name": inp[0], "type": inp[1], "validation": recoverType(inp[1], val)} for inp, val in zip(inputs, validation_rules)],
         "outputs": output_type
     }
-
+    
     # Optional: Save YAML to a file
     if save_type == "yaml":
         with open('predict_signature.yaml', 'w') as file:

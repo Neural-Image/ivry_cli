@@ -9,10 +9,10 @@ class Predictor(BasePredictor):
         pass
     # The arguments and types the model takes as input
     def predict(self,
-                image: Path = Input(description="Grayscale input image"),
-                prompt: str = Input(default="hello", max_length=1000, description="this is a prompt"),
-                steps: int = Input(default=50, ge=0, le=1000, description="steps"),
-                guidance_scale: float = Input(default=5.0, ge=0, le=20, description="guidance_scale"),
+                image: Path = Input(default="image.jpg"),
+                prompt: str = Input(default="hello"),
+                steps: int = Input(default=50),
+                guidance_scale: float = Input(default=5.0),
     ) -> list[Path]:
         print("input image:", image)
         img = Image.open(image)
