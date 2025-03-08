@@ -146,7 +146,7 @@ ivry_cli run_server
 ivry_cli run_server --force
 
 # Specify a different project path
-ivry_cli run_server --project_path /path/to/my_project 
+ivry_cli run_server --project project_folder_name #like app_30
 ```
 
 ### Stopping the Server
@@ -202,28 +202,6 @@ This will detect any running ComfyUI instances and display:
 - Process ID and name
 - Installation path
 - Listening port
-
----
-
-## Additional Utilities
-
-### Parse predict.py
-Generate signature files from your predict.py:
-```bash
-ivry_cli parse_predict --predict_filename {path_to_predict.py}
-```
-
-### Upload Configuration
-Upload configuration details to the server:
-```bash
-ivry_cli upload_config
-```
-
-### Get Heartbeat Status
-Check the status of your application's heartbeat monitoring:
-```bash
-ivry_cli get_heartbeat_status
-```
 
 ---
 

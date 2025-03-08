@@ -481,14 +481,14 @@ class Cli:
             return f"Unexpected error: {str(e)}"
 
 
-    def run_server(self, project_path: str = None, force: bool = False):
+    def run_server(self, project: str = None, force: bool = False):
         """
         Start the ivry_cli model server and cloudflared tunnel using PM2
         
         This function uses PM2 to manage and monitor the ivry_cli model server and cloudflared tunnel processes
         
         Args:
-            project_path (str, optional): Path to the project directory. If not provided,
+            project (str, optional): Path to the project directory. If not provided,
                                         uses the current working directory.
 
             force (bool, optional): If True, forcibly restart services even if they're already running.
@@ -507,8 +507,8 @@ class Cli:
             return "错误: 未找到PM2。请使用'npm install -g pm2'安装PM2。"
         
         # 确定项目目录
-        if project_path:
-            project_dir = Path(project_path)
+        if project:
+            project_dir = Path("ivry_project/comfyUI_project") / Path(project)
         else:
             project_dir = Path.cwd()
         
@@ -654,7 +654,7 @@ class Cli:
         except Exception as e:
             return f"启动服务时发生错误: {str(e)}"
 
-    def stop_server(self, project_path: str = None, force: bool = False):
+    def stop_server(self, project: str = None, force: bool = False):
         """
         Stop all ivry services managed by PM2.
         
@@ -668,8 +668,8 @@ class Cli:
         """
         try:
             # 确定项目目录
-            if project_path:
-                project_dir = Path(project_path)
+            if project:
+                project_dir = Path("ivry_project/comfyUI_project") / Path(project)
             else:
                 project_dir = Path.cwd()
             
@@ -785,7 +785,7 @@ class Cli:
         # 终止3009端口上的进程
         kill_process_by_port(3009)
 
-    def pm2_status(self, project_path: str = None):
+    def pm2_status(self, project: str = None):
         """
         Display the status of ivry services managed by PM2.
         
@@ -798,8 +798,8 @@ class Cli:
         """
         try:
             # 确定项目目录
-            if project_path:
-                project_dir = Path(project_path)
+            if project:
+                project_dir = Path("ivry_project/comfyUI_project") / Path(project)
             else:
                 project_dir = Path.cwd()
             
@@ -818,7 +818,7 @@ class Cli:
         except Exception as e:
             return f"获取PM2状态时出错: {str(e)}"
 
-    def pm2_control(self, command: str, process: str = "all", project_path: str = None):
+    def pm2_control(self, command: str, process: str = "all", project: str = None):
         """
         控制PM2管理的ivry服务。
         
@@ -842,8 +842,8 @@ class Cli:
                 return f"错误: 无效的进程 '{process}'。有效选项: {', '.join(valid_processes)}"
             
             # 确定项目目录
-            if project_path:
-                project_dir = Path(project_path)
+            if project:
+                project_dir = Path("ivry_project/comfyUI_project") / Path(project)
             else:
                 project_dir = Path.cwd()
             
@@ -883,7 +883,7 @@ class Cli:
         except Exception as e:
             return f"控制PM2时出错: {str(e)}"
 
-    def pm2_logs(self, process: str = "all", lines: int = 20, project_path: str = None):
+    def pm2_logs(self, process: str = "all", lines: int = 20, project: str = None):
         """
         显示PM2管理的ivry服务的日志。
         
@@ -903,8 +903,8 @@ class Cli:
                 return f"错误: 无效的进程 '{process}'。有效选项: {', '.join(valid_processes)}"
             
             # 确定项目目录
-            if project_path:
-                project_dir = Path(project_path)
+            if project:
+                project_dir = Path("ivry_project/comfyUI_project") / Path(project)
             else:
                 project_dir = Path.cwd()
             
