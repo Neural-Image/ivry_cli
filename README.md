@@ -133,7 +133,6 @@ ivry_cli run_server [OPTIONS]
 
 #### Options:
 - `--project_path PATH`: Path to your project directory (default: current directory)
-- `--background`: Run in background mode (frees terminal)
 - `--force`: Override and restart even if services are already running
 
 #### Examples:
@@ -143,14 +142,11 @@ ivry_cli run_server [OPTIONS]
 cd my_project
 ivry_cli run_server
 
-# Start in background mode (frees terminal)
-ivry_cli run_server --background
-
 # Force restart if already running
 ivry_cli run_server --force
 
 # Specify a different project path
-ivry_cli run_server --project_path /path/to/my_project --background
+ivry_cli run_server --project_path /path/to/my_project 
 ```
 
 ### Stopping the Server

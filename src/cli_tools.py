@@ -481,7 +481,7 @@ class Cli:
             return f"Unexpected error: {str(e)}"
 
 
-    def run_server(self, project_path: str = None, detached: bool = False, force: bool = False, background: bool = False):
+    def run_server(self, project_path: str = None, force: bool = False):
         """
         Start the ivry_cli model server and cloudflared tunnel using PM2
         
@@ -490,11 +490,9 @@ class Cli:
         Args:
             project_path (str, optional): Path to the project directory. If not provided,
                                         uses the current working directory.
-            detached (bool, optional): If True, runs the servers in detached mode (background).
-                                    Default is False.
+
             force (bool, optional): If True, forcibly restart services even if they're already running.
                                     Default is False.
-            background (bool, optional): If True, run with nohup in the background. Default is False.
         
         Returns:
             str: A message indicating the result of the operation
