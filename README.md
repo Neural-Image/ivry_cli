@@ -1,7 +1,8 @@
-# ivry_cli Documentation
+# Updated ivry_cli Documentation
 
 ## 🔥 Updates
-- **2025/03/07**: Added new `run_server` command with background processing options
+- **2025/03/07**: Fixed issues with `run_server` command, now using direct subprocess approach 
+- **2025/03/07**: Added troubleshooting section for common errors
 - **2025/03/07**: Added new `list_apps` command to view all your applications
 - **2025/02/27**: ivry_cli pulling capabilities added
 - **2025/02/26**: WebUI updates:
@@ -122,7 +123,7 @@ ivry_cli update_app --model_id {model_id}
 
 ## Hosting Your Project
 
-### New: Unified Server Management
+### Simplified Server Management
 
 Start both the ivry_cli model server and cloudflared tunnel with a single command:
 
@@ -132,8 +133,7 @@ ivry_cli run_server [OPTIONS]
 
 #### Options:
 - `--project_path PATH`: Path to your project directory (default: current directory)
-- `--detached`: Run with supervisor in daemon mode (requires supervisor package)
-- `--background`: Run in background without supervisor
+- `--background`: Run in background mode (frees terminal)
 - `--force`: Override and restart even if services are already running
 
 #### Examples:
@@ -146,9 +146,6 @@ ivry_cli run_server
 # Start in background mode (frees terminal)
 ivry_cli run_server --background
 
-# Start in detached mode with supervisor (requires supervisor package)
-ivry_cli run_server --detached
-
 # Force restart if already running
 ivry_cli run_server --force
 
@@ -159,24 +156,11 @@ ivry_cli run_server --project_path /path/to/my_project --background
 ### Stopping the Server
 
 ```bash
-# Stop services started with supervisor
-ivry_cli stop_server [--project_path PATH]
-
-# For background mode without supervisor, use
-ivry_cli stop_server --background [--project_path PATH]
+# Stop all running ivry services
+ivry_cli stop_server [--project_path PATH] [--force]
 ```
 
-### Process Monitoring with Supervisor
-
-If you've installed the supervisor package, you can use these commands:
-
-```bash
-# Check status of running services
-ivry_cli supervisor_status [--project_path PATH]
-
-# Control specific services
-ivry_cli supervisor_control {start|stop|restart} [--process {all|ivry_server|cloudflared_tunnel}] [--project_path PATH]
-```
+The `--force` option allows you to terminate services that may be stuck or not responding to normal shutdown commands.
 
 ### Traditional Method (Still Supported)
 
@@ -249,6 +233,13 @@ ivry_cli get_heartbeat_status
 
 ## Troubleshooting
 
+### Module Not Found Error
+If you see "No module named ivry_cli" errors when using `run_server`, make sure you have correctly installed the package:
+```bash
+pip install -e .
+```
+And that your environment variables are correctly set up.
+
 ### WebSocket Issues
 If you encounter WebSocket errors when starting the server, try:
 ```bash
@@ -266,20 +257,25 @@ If you're having trouble connecting to the server, check:
 Check these log files for troubleshooting:
 - `logs/ivry_server.log`: Application runtime logs
 - `logs/cloudflared.log`: CloudFlare tunnel logs
-- `logs/supervisord.log`: Supervisor logs (if using supervisor)
 
 ### Processes Won't Stop
 If you're having trouble stopping processes:
 ```bash
-# For supervisor-managed processes
+# Use the force flag
 ivry_cli stop_server --force
 
-# For background processes
+# Or manually kill processes
 ps aux | grep ivry_cli
 ps aux | grep cloudflared
 # Then use the PIDs to terminate them
 kill <PID>
 ```
+
+### Port Already in Use
+If you see "Port 3009 is already in use" errors:
+1. Check for running ivry processes: `ps aux | grep ivry`
+2. Stop any running processes: `ivry_cli stop_server --force`
+3. If needed, manually kill the process using the port: `lsof -i:3009` then `kill <PID>`
 
 ---
 
@@ -291,7 +287,7 @@ kill <PID>
 
 
 ### Completed Tasks:
-✅ Background running mode  
+✅ Background running mode using direct subprocess approach  
 ✅ Find ComfyUI function in WebUI  
 ✅ Windows version support  
 ✅ List applications command  

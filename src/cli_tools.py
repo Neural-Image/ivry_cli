@@ -349,7 +349,7 @@ class Cli:
             
             data = response.json()
             
-            if data.get("status") != "success":
+            if data.get("success") != True:
                 return f"错误: {data.get('message', '发生未知错误')}"
             
             app_config = data.get("data", {})
@@ -571,12 +571,14 @@ class Cli:
         cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
         
         # 创建PM2配置
+        # Create PM2 configuration
         pm2_config = {
             "apps": [
                 {
                     "name": "ivry_server",
-                    "script": "ivry_cli",
-                    "args": ["start", "model", f"--upload-url={IVRY_URL}pc/client-api/upload"],
+                    "interpreter": "python",  # Specify the interpreter
+                    "script": shutil.which("ivry_cli"),  # Use the full path to the ivry_cli executable
+                    "args": ["start", "model", f"--upload-url={IVRY_URL}api/cli/upload"],
                     "cwd": str(project_dir),
                     "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
                     "output": str(ivry_log_file),
@@ -587,6 +589,7 @@ class Cli:
                         "PM2_HOME": str(project_dir / ".pm2")
                     }
                 },
+                # cloudflared configuration remains unchanged
                 {
                     "name": "cloudflared_tunnel",
                     "script": "cloudflared",
@@ -620,27 +623,27 @@ class Cli:
             subprocess.run(["pm2", "save"], check=True)
             
             # 启动心跳服务（如果model_id可用）
-            if model_id and model_id != "unknown":
-                try:
-                    global _heartbeat_manager
-                    apikey = get_apikey()
-                    upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
+            # if model_id and model_id != "unknown":
+            #     try:
+            #         global _heartbeat_manager
+            #         apikey = get_apikey()
+            #         upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
                     
-                    # 停止现有的心跳管理器
-                    if _heartbeat_manager:
-                        _heartbeat_manager.stop()
+            #         # 停止现有的心跳管理器
+            #         if _heartbeat_manager:
+            #             _heartbeat_manager.stop()
                     
-                    # 启动新的心跳管理器
-                    _heartbeat_manager = HeartbeatManager(
-                        upload_url=upload_url,
-                        model_id=model_id,
-                        api_key=apikey,
-                        interval=3600  # 默认1小时间隔
-                    )
-                    _heartbeat_manager.start()
-                    print("Heartbeat service started")
-                except Exception as e:
-                    print(f"警告: 启动心跳服务失败: {e}")
+            #         # 启动新的心跳管理器
+            #         _heartbeat_manager = HeartbeatManager(
+            #             upload_url=upload_url,
+            #             model_id=model_id,
+            #             api_key=apikey,
+            #             interval=3600  # 默认1小时间隔
+            #         )
+            #         _heartbeat_manager.start()
+            #         print("Heartbeat service started")
+            #     except Exception as e:
+            #         print(f"警告: 启动心跳服务失败: {e}")
             
             return (f"Services started with PM2.\n"
                 f"To view status: ivry_cli pm2_status\n"
