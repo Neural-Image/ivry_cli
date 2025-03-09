@@ -1,17 +1,22 @@
 [build-system]
-requires = ["setuptools", "wheel"]  # Build dependencies
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ivry_cli"
 version = "0.1.0"
-description = "A Python package example"
+description = "CLI tool for managing ivry projects and models"
+readme = "README.md"
+requires-python = ">=3.9"  # This specifies the minimum Python version required
+license = {text = "Proprietary"}
 authors = [
-    { name = "eric", email = "eric.email@example.com" }
+    {name = "eric", email = "eric.email@example.com"}
+]
+maintainers = [
+    {name = "ivry Team", email = "support@ivry.co"}
 ]
 
 dependencies = [
-  # intentionally loose. perhaps these should be vendored to not collide with user code?
   "attrs>=20.1,<24",
   "fastapi>=0.75.2,<0.111.0",
   "pydantic>=1.9,<3",
@@ -22,24 +27,20 @@ dependencies = [
   "uvicorn[standard]>=0.12,<1",
   "pillow",
   "fire",
-  "psutil>=5.8,<6",  # 添加 psutil，确保兼容较新版本
-  "websocket-client>=1.0,<2",  # websocket-client
-]
-
-[project.optional-dependencies]
-supervisor = [
-  "supervisor>=4.2.5",
-  "xmlrpc>=1.0.1",
+  "psutil>=5.8,<6",  # Process and system utilities
+  "websocket-client>=1.0,<2",  # WebSocket client for ComfyUI
+  "python-dotenv",  # Environment variables
+  "gradio",  # Web UI
 ]
 
 [tool.setuptools]
 include-package-data = false
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["cog*"]
-exclude = ["tests*"]
+packages = {find = {where = ["src"]}}
 
 [project.scripts]
-ivry_cli = "cli_tools:main"  # CLI tool entry point
+ivry_cli = "cli_tools:main"
 ivry_web = "ui:main"
+
+# Dynamic section: specifies that README content should be loaded from the README.md file
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"]}
