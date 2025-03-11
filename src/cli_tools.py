@@ -18,19 +18,11 @@ from heartbeat import HeartbeatManager
 from websocket_comfyui import create_predict
 from pull_project import generate_predict_file
 from find_comfyui_path import find_comfyui_path_by_port
-try:
-    import supervisor.supervisord
-    import supervisor.options
-    import supervisor.xmlrpc
-    SUPERVISOR_AVAILABLE = True
-except ImportError:
-    SUPERVISOR_AVAILABLE = False
-
+from typing import Optional
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
-IVRY_URL = "http://54.183.209.254:3000/"
-#IVRY_URL = "https://www.lormul.org/"
+IVRY_URL = "https://www.lormul.org/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 _heartbeat_manager = None
@@ -308,6 +300,8 @@ class Cli:
         return {"running": False, "message": "Heartbeat service not started"}
 
 
+
+
     def pull_project(self, app_id: str, comfyui_port: str = "8188", project_name: str = None, comfyUI_dir: str = None):
         """
         从服务器拉取应用配置并创建本地项目目录
@@ -325,8 +319,6 @@ class Cli:
         返回:
             str: 状态消息
         """
-        # 使用提供的项目名称或默认为app_id
-        
         
         # 获取API密钥进行认证
         apikey = get_apikey()
@@ -377,6 +369,15 @@ class Cli:
                 with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json 已保存到 {dest_path}")
+            system_name = platform.uname().release.lower()
+            if "microsoft" in system_name:
+                system_name = "windows"
+                if comfyUI_dir == None:
+                    return "Please enter your comfyUI dir as parameters, its the dir to your custom_nodes's location. For example: ivry_cli pull_project --app_id 66 --comfyUI_dir E:\ComfyUI_windows_portable\ComfyUI_windows_portable\ComfyUI"
+                
+     
+
+
             if comfyUI_dir == None:
                 comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
             if not comfyUI_dir:
@@ -384,8 +385,7 @@ class Cli:
                         f"{comfyui_port} 上。\n" +
                         "if your comfyUI process is running, you could add it to the command。like: ivry_cli pull_project 66 --comfyui_port 8188 --comfyUI_dir /path/to/comfyUI")
             # 根据配置数据创建必要的预测器文件
-            system_name = platform.system().lower()
-
+            
             generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
         
             # 这部分取决于您的具体应用设计，可能需要根据实际情况调整
