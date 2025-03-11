@@ -19,18 +19,7 @@ Before moving forward, make sure you reboot your computer so that Windows 11 wil
 
 ## 2. Init wsl2 environment
 
-### 2.1 install requirements
-
-Install requirements by 
-
-```bash
-. install.sh
-```
-
-note: if your wsl cannot do apt update, you can open install.sh in notebook and copy paste each steps
-
-(optional)
-### 2.2 import wsl2 environment
+### import wsl2 environment
 ```bash
 wsl --import ivry path\to\your\wsl\path path\to\backup.tar
 ```
