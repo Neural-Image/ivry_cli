@@ -36,20 +36,24 @@ wsl --import ivry path\to\your\wsl\path path\to\backup.tar
 ```
 example:
 ```bash
-wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\Ubuntu22-04.tar
+wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\ivry-cli.tar
 ```
 
 password for wsl2 ivry is ivry
 ```bash
-wsl -d ivry -u ivry #to enter the wsl2, make sure you enter wsl2 with user ivry (not root) 
+wsl -d ivry
 ```
 
 
-## 3. Run webui
+## 3. Get into ivry_cli
 
-Run webui by:
+check ivry_cli:
 ```bash
-cd path/to/your/cli
-ivry_web
+cd /opt/ivry_cli
 ```
-
+```bash
+source venv/bin/activate
+```
+```bash
+ivry_cli
+```
