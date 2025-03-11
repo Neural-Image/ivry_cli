@@ -4,6 +4,42 @@ from pathlib import Path
 import time
 import os
 from typing import Dict, List, Any, Optional, Tuple, Union
+import re
+
+def wsl_to_windows_path(wsl_path):
+
+    # Try using wslpath command (this is the most accurate method)
+    try:
+        result = subprocess.run(['wslpath', '-w', wsl_path], 
+                               capture_output=True, 
+                               text=True, 
+                               check=True)
+        return result.stdout.strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        # If wslpath is not available, build the path manually
+        pass
+    
+    # Get WSL distribution name
+    try:
+        with open('/etc/os-release', 'r') as f:
+            os_release = f.read()
+        
+        distro_name = re.search(r'NAME="([^"]+)"', os_release)
+        if distro_name:
+            distro_name = distro_name.group(1)
+        else:
+            # If can't extract from os-release, use default name
+            distro_name = "Ubuntu"
+    except:
+        distro_name = "Ubuntu"
+    
+    # Build Windows path
+    # Try both possible formats
+    if os.path.exists(f"//wsl.localhost/{distro_name}"):
+        return f"\\\\wsl.localhost\\{distro_name}{wsl_path}"
+    else:
+        return f"\\\\wsl$\\{distro_name}{wsl_path}"
+
 
 def get_wsl_distro_name() -> str:
     """获取WSL发行版名称"""
@@ -48,8 +84,7 @@ def get_local_ip(port: Union[str, int]) -> str:
         return f"127.0.0.1:{port}"
 
 def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: str, os_system: str, workflow_name: str) -> str:
-    """生成predict.py文件"""
-    print("start to generate predict.py")
+
     input_list = input_section["data"]["selectedNodes"].keys()
     workflow_name = workflow_name   
     workflow_api_json = input_section["data"]["json"]
@@ -145,8 +180,9 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
                     f"str({section})\n        "
                 )
             else:
-                wsl_path = r"\\wsl$\\" + wsl_name + r"\tmp"
-
+                wsl_path = wsl_to_windows_path("/tmp")
+                wsl_path = wsl_path[:-4]
+       
                 logic_sections.append(
                     f"prompt_config['{tmp_node_id}']['inputs']['{tmp_node_input}'] = r'{wsl_path}'"
                     f" + '/' + str({section})\n        "
