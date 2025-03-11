@@ -1,7 +1,0 @@
-tunnel: 7a32c54f-f326-40a5-8984-0ab49798562f
-credentials-file: tunnel_credential.json
-
-ingress:
-  - hostname: model1.lormul.org
-    service: http://localhost:3009    
-  - service: http_status:404
