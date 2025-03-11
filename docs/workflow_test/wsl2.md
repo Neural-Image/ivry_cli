@@ -23,16 +23,16 @@ Before moving forward, make sure you reboot your computer so that Windows 11 wil
 
 ### import wsl2 environment
 ```bash
-wsl --import ivry path\to\your\wsl\path path\to\backup.tar
+wsl --import ivry-cli path\to\your\wsl\path path\to\backup.tar
 ```
 example:
 ```bash
-wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\ivry-cli.tar
+wsl --import ivry-cli C:\WSL\Ubuntu C:\User\Downloads\ivry-cli.tar
 ```
 
 password for wsl2 ivry is ivry
 ```bash
-wsl -d ivry
+wsl -d ivry-cli
 ```
 
 
