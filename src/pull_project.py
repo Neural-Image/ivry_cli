@@ -42,7 +42,7 @@ def wsl_to_windows_path(wsl_path):
 
 
 def get_wsl_distro_name() -> str:
-    """获取WSL发行版名称"""
+    """get the name of the WSL distribution"""
     try:
         result = subprocess.run(
             ["bash", "-c", "echo $WSL_DISTRO_NAME"],
@@ -56,14 +56,14 @@ def get_wsl_distro_name() -> str:
         return "Ubuntu"  # Default to Ubuntu if failed
 
 def win_path_to_wsl_path(win_path: str) -> str:
-    """将Windows路径转换为WSL路径"""
+    """Convert a Windows path to a WSL path"""
     if not win_path:
         return ""
     
-    # 统一将反斜杠替换为正斜杠
+    # Convert backslashes to forward slashes
     path_unix = win_path.replace("\\", "/")
     
-    # 如果路径形如 "C:/..."，那么把它转为 "/mnt/c/..."
+    # Check if the path starts with a drive letter
     if len(path_unix) >= 2 and path_unix[1] == ':':
         drive_letter = path_unix[0].lower()
         path_unix = "/mnt/" + drive_letter + path_unix[2:]
@@ -71,7 +71,7 @@ def win_path_to_wsl_path(win_path: str) -> str:
     return path_unix
 
 def get_local_ip(port: Union[str, int]) -> str:
-    """获取本地IP地址和端口"""
+    """Get the local IP address"""
     try:
         result = subprocess.check_output(
             "ip route | grep default | awk '{print $3}'", 
@@ -88,10 +88,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     input_list = input_section["data"]["selectedNodes"].keys()
     workflow_name = workflow_name   
     workflow_api_json = input_section["data"]["json"]
-    # 获取 selectedNodes
     selected_nodes = input_section["data"]["selectedNodes"]
-
-    # 提取 component_type 和 type，使用 .get() 防止 KeyError
     component_types = {
         node_name: node_data["data"].get("component_type", "N/A")
         for node_name, node_data in selected_nodes.items()
@@ -197,17 +194,17 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     
     logic_section = "".join(logic_sections)
     print("finish to generate predict.py")
-    # 获取工作流文件的绝对路径
+
     workflow_path = Path(f"comfyui_workflows/{workflow_name}.json").resolve()
     with workflow_path.open("w", encoding="utf-8") as f:
         json.dump(workflow_api_json, f, ensure_ascii=False, indent=4)
-    # 替换模板中的占位符
+
     content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
     content = content.replace("{{port_comfyui}}", f"'{port_str}'")
     content = content.replace("{{input_section}}", input_parameter)
     content = content.replace("{{workflow_dir}}", f"r'{workflow_path}'")
     content = content.replace("{{logic_section}}", logic_section)
-    # 保存为 predict.py
+
     print("finish to generate predict.py")
     with open("predict.py", "w") as predict_file:
         predict_file.write(content)

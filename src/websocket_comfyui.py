@@ -10,7 +10,7 @@ import traceback
 import sys
 
 LOG_FILE = "client.log"
-MIN_INTERVAL = 1  # 最小间隔时间
+MIN_INTERVAL = 1  
 
 
 def create_predict():
@@ -130,7 +130,6 @@ def get_images(ws, client_id, prompt, server_address):
         if execution_errors:
             error_details = "\n".join(execution_errors)
             logger.error(f"ComfyUI execution failed with errors:\n{error_details}")
-            # 抛出异常，中断处理流程并将错误传播到 Cog
             raise RuntimeError(f"ComfyUI execution failed with {len(execution_errors)} errors: {error_details}")
         else:
             logger.info("Execution completed successfully")
@@ -166,5 +165,5 @@ def get_images(ws, client_id, prompt, server_address):
     except Exception as e:
         error_msg = f"Critical error in get_images: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
-        # 不再返回空字典，而是将错误传播出去
+
         raise RuntimeError(f"ComfyUI processing failed: {str(e)}")
