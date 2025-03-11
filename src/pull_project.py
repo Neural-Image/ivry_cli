@@ -74,7 +74,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     for index, i in enumerate(component_types):
         cur_type = ""
         if component_types[i] == "input":
-            if element_types[i] == "text":
+            if element_types[i] == "string":
                 cur_type = "str"
             elif element_types[i] == "float":
                 cur_type = "float"

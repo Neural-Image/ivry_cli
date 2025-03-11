@@ -29,8 +29,8 @@ except ImportError:
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
-#IVRY_URL = "https://www.ivry.co/"
-IVRY_URL = "https://www.lormul.org/"
+IVRY_URL = "http://54.183.209.254:3000/"
+#IVRY_URL = "https://www.lormul.org/"
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 _heartbeat_manager = None
