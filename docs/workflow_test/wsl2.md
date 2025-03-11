@@ -48,3 +48,19 @@ source venv/bin/activate
 ```bash
 ivry_cli
 ```
+
+## 4. pull project from ivry website
+
+### Make sure your comfyUI dir is in " "
+```bash
+ivry_cli pull__project --app_id your_app_id --comfyUI_dir "your_comfyUI_dir"
+#ivry_cli pull_project --app_id 48 --comfyUI_dir "C:\Users\playtime\Desktop\ComfyUI_windows_portable\ComfyUI"
+```
+
+## 5. host your project
+### project name is "app_" + your app id
+```bash
+ivry_cli run_server --project app_id --force
+#ivry_cli run_server --project app_48 --force
+```
+
