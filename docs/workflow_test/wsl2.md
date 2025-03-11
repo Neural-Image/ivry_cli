@@ -30,7 +30,7 @@ example:
 wsl --import ivry-cli C:\WSL\Ubuntu C:\User\Downloads\ivry-cli.tar
 ```
 
-password for wsl2 ivry is ivry
+get into the wsl2 environment
 ```bash
 wsl -d ivry-cli
 ```
@@ -53,7 +53,7 @@ ivry_cli
 
 ### Make sure your comfyUI dir is in " "
 ```bash
-ivry_cli pull__project --app_id your_app_id --comfyUI_dir "your_comfyUI_dir"
+ivry_cli pull_project --app_id your_app_id --comfyUI_dir "your_comfyUI_dir"
 #ivry_cli pull_project --app_id 48 --comfyUI_dir "C:\Users\playtime\Desktop\ComfyUI_windows_portable\ComfyUI"
 ```
 
