@@ -4,7 +4,6 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from business_server import main as start_business_server
 from model_server import main as start_model_server_
-from parse_InOut import parse_predict
 from cog.server.http import parse_args, main as start_model_server
 from communicate import upload_config
 import requests
@@ -57,86 +56,6 @@ class Cli:
             f.write(str(auth_token))
         return f"Token saved in {IVRY_CREDENTIAL_DIR / 'token.txt'}"
     
-    def update_app(self, model_id: str, model_name: str = ''):
-        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
-        apikey = get_apikey()
-        predict_path = Path.cwd() / model_name
-        tmp = predict_path / IVRY_PREDICT_FILE
-        if not tmp.exists():
-            raise Exception("Sorry, you need to init the project first.")
-        else:
-            signature_path = predict_path / "predict_signature.json"
-            if not signature_path.exists():
-                parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
-        print("generating predict_signature.json")
-        headers = {
-        'X-API-KEY': str(apikey),
-        'Content-Type': 'application/json',
-        }
-        url = IVRY_URL + "pc/client-api/predict_signature/" + str(model_id)
-
-        with open(signature_path, "r") as json_file:
-            data = json.load(json_file)
-        payload = json.dumps(data, indent=4)
-        
-        # call endpoint:/pc/client-api/predict_signature/{id}, to update json        
-        response = requests.request("POST", url, headers=headers, data=payload)
-        json_data = response.json()
-        print(json_data.get("httpStatus"))
-        print(json_data.get("data"))
-    
-
-    def upload_app(self, model_name: str = ''):
-        # read token.txt
-        # Reading the file
-        
-        apikey = get_apikey()
-        print(f"Auth token: {apikey}")
-        predict_path = Path.cwd() / model_name
-        tmp = predict_path / IVRY_PREDICT_FILE
-        if not tmp.exists():
-            raise Exception("Sorry, you need to init the project first.")
-        else:
-        # call fucntion in parse_InOut.py to parse predict.py to obtain predict_signature json
-            parse_predict(predict_path / IVRY_PREDICT_FILE,"json")
-        print("generating predict_signature.json")
-        # call function in docs/workflow_test/python/predict_signature.py, update json
-
-        headers = {
-        'X-API-KEY': str(apikey),
-        'Content-Type': 'application/json',
-        }
-        url = IVRY_URL + "pc/client-api/predict_signature/"
-        with open("./predict_signature.json", "r") as json_file:
-            data = json.load(json_file)
-        payload = json.dumps(data, indent=4)
-        response = requests.request("POST", url, headers=headers, data=payload)
-        json_data = response.json()
-        print(json_data.get("httpStatus"))
-        # refer to docs/workflow_test/doc.md, save crediential and config to two separate json files at IVRY_CREDENTIAL_DIR
-        IVRY_CREDENTIAL_DIR.mkdir(parents=True, exist_ok=True)
-        credential = json_data["data"]["credential"]
-        config = json_data["data"]["config"]
-        # TMP: add token to config
-        # Replace "tunnel" key with "token" and update its value
-        config["token"] = credential["token"]  # Add the new key with the updated value
-        del config["tunnel"]  # Remove the old "tunnel" key 
-
-        # Save `credential` as a JSON file
-        credential_file = predict_path / "tunnel_credential.json"
-        with open(credential_file, "w") as file:
-            json.dump(credential, file, indent=4)
-
-        # Save `config` as a JSON file
-        config_file = predict_path / "tunnel_config.json"
-        with open(config_file, "w") as file:
-            json.dump(config, file, indent=4)
-
-        print(f"Credential saved to: {credential_file}")
-        print(f"Config saved to: {config_file}")
-
-   
-
 
     def start(self, server: str, **kwargs):
         if server == "model":
@@ -153,9 +72,6 @@ class Cli:
         else:
             raise ValueError(f"server {server} is unknown.")
 
-    def parse_predict(self, predict_filename: str = "predict.py"):
-        parse_predict(predict_filename)
-        return f"Created predict_signature.yaml."
 
 
     def find_comfyUI(self):
