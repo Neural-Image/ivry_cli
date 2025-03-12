@@ -189,6 +189,10 @@ If you see "Port 3009 is already in use" errors:
 
 ## TODOs
 
+- [ ] update parse_inout for python project
+      - must follow current syntax, must has default values, also with optional values
+      - can edit either webite or local
+- [ ] python process
 - [ ] Support web pull
 - [ ] WSL2 package
 - [ ] Heartbeat sending improvements
