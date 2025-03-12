@@ -40,8 +40,9 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
    ```
 
 ---
+# Steps to host your app on ivry
 
-## Authentication
+## 1.  Authentication
 
 1. Retrieve your API key from our website.
 2. Login using the CLI:
@@ -49,79 +50,28 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
    ivry_cli login --auth_token {your_apikey}
    ```
 
----
+## 2. Create your app on ivry website
 
-## Initializing a Project
+## 3. Pull your app to cli
 
-Currently, the CLI supports two modes: `comfyui` and `model`.
+Befor do that, make sure you start your comfyUI. make sure you have --listen for it
+or
+You need to pass your comfyUI directory
 
 ```bash
-ivry_cli init_app --project_name {project_name} --mode {comfyui/model}
+ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188
 ```
+for example:
+ivry_cli pull_project --app_id 66 # if your are using default settings for comfyUI
 
-### Examples:
-- For **ComfyUI**:
-  ```bash
-  ivry_cli init_app --project_name my_project --mode comfyui
-  ```
-- For **Model-based projects**:
-  ```bash
-  ivry_cli init_app --project_name my_project --mode model
-  ```
-
-Once initialized, a project folder is created, and a `predict.py` file will be available. Edit `predict.py` according to your model or workflow requirements.
-
----
-
-## Uploading Your Project
-
-### Important: Use Absolute Paths in `predict.py`
-
-Your `predict.py` file is located under:
+or
 ```bash
-/ivry_cli/{project_name}/predict.py
-```
-Modify the script as needed, following the provided comments, and then upload your app:
-
-```bash
-ivry_cli upload_app --model_name {project_name}
-```
-Or navigate to the project directory and execute:
-```bash
-cd {project_name}
-ivry_cli upload_app
+ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188 --comfyUI_dir path_to_your_comfyUI
 ```
 
 ---
 
-## Managing Your Models
-
-### Check Uploaded Models
-```bash
-ivry_cli list_models
-```
-
-### List All Your Applications
-View all your applications with detailed information:
-```bash
-ivry_cli list_apps
-```
-This displays ID, name, public status, state, and creation date for all your applications.
-
-### Update an Existing Model
-If you update `predict.py` after uploading, you can update your model:
-```bash
-ivry_cli update_app --model_id {model_id} --model_name {project_name}
-```
-Or use:
-```bash
-cd {project_name}
-ivry_cli update_app --model_id {model_id}
-```
-
----
-
-## Hosting Your Project
+## 4. Hosting Your Project
 
 ### Simplified Server Management
 
@@ -146,7 +96,7 @@ ivry_cli run_server
 ivry_cli run_server --force
 
 # Specify a different project path
-ivry_cli run_server --project project_folder_name #like app_30
+ivry_cli run_server --project project_folder_name --force #like app_30
 ```
 
 ### Stopping the Server
@@ -171,22 +121,6 @@ ivry_cli start model --upload-url=https://www.lormul.org/pc/client-api/upload
 cd {project_name}
 cloudflared tunnel --config tunnel_config.json run
 ```
-
----
-
-## Pulling an Existing Project
-
-You can pull an existing project from the ivry platform using the project ID:
-
-```bash
-ivry_cli pull_project --project_id {project_id} [--project_name {optional_local_name}] [--comfyui_port {port_number}]
-```
-
-This will:
-1. Download the project configuration from the server
-2. Create a local directory for the project
-3. Create all necessary files (`predict.py`, `predict_signature.json`, etc.)
-4. Set up CloudFlare tunnel configuration
 
 ---
 
