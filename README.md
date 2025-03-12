@@ -96,7 +96,7 @@ ivry_cli run_server
 ivry_cli run_server --force
 
 # Specify a different project path
-ivry_cli run_server --project project_folder_name #like app_30
+ivry_cli run_server --project project_folder_name --force #like app_30
 ```
 
 ### Stopping the Server
@@ -121,22 +121,6 @@ ivry_cli start model --upload-url=https://www.lormul.org/pc/client-api/upload
 cd {project_name}
 cloudflared tunnel --config tunnel_config.json run
 ```
-
----
-
-## Pulling an Existing Project
-
-You can pull an existing project from the ivry platform using the project ID:
-
-```bash
-ivry_cli pull_project --project_id {project_id} [--project_name {optional_local_name}] [--comfyui_port {port_number}]
-```
-
-This will:
-1. Download the project configuration from the server
-2. Create a local directory for the project
-3. Create all necessary files (`predict.py`, `predict_signature.json`, etc.)
-4. Set up CloudFlare tunnel configuration
 
 ---
 
