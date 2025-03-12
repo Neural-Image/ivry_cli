@@ -341,7 +341,7 @@ class Cli:
         
 
         result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if "ivry_server" in result.stdout or "cloudflared_tunnel" in result.stdout:
+        if "ivry_server" in result.stdout or "ivry_cloudflared_tunnel" in result.stdout:
             if not force:
                 return ("PM2 already running \n"
                     "check status:ivry_cli pm2_status\n"
@@ -350,7 +350,7 @@ class Cli:
             else:
    
                 subprocess.run(["pm2", "delete", "ivry_server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                subprocess.run(["pm2", "delete", "cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
   
         ivry_log_file = (logs_dir / "ivry_server.log").resolve()
@@ -375,7 +375,7 @@ class Cli:
                 },
                 # cloudflared configuration remains unchanged
                 {
-                    "name": "cloudflared_tunnel",
+                    "name": "ivry_cloudflared_tunnel",
                     "script": "cloudflared",
                     "args": ["tunnel", "--config", "tunnel_config.json", "run"],
                     "cwd": str(project_dir),
@@ -470,7 +470,7 @@ class Cli:
             import subprocess
             
             result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if "ivry_server" not in result.stdout and "cloudflared_tunnel" not in result.stdout:
+            if "ivry_server" not in result.stdout and "ivry_cloudflared_tunnel" not in result.stdout:
                 return "No running ivry services found."
             
             try:
@@ -482,10 +482,10 @@ class Cli:
             
             try:
    
-                subprocess.run(["pm2", "delete", "cloudflared_tunnel"], check=not force)
+                subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], check=not force)
             except subprocess.CalledProcessError:
                 if not force:
-                    return "Failed to stop cloudflared_tunnel. Try using the --force flag."
+                    return "Failed to stop ivry_cloudflared_tunnel. Try using the --force flag."
             
            
             subprocess.run(["pm2", "save"], check=False)
@@ -597,12 +597,13 @@ class Cli:
             return f"error when get pm2 status: {str(e)}"
 
     def pm2_control(self, command: str, process: str = "all", project: str = None):
+        ### TODO  only control ivry process
         """
         control pm2 process
         
         参数:
             command (str): commands ('start', 'stop', 'restart', 'reload')
-            process (str, optional): process ('ivry_server', 'cloudflared_tunnel', or 'all')。
+            process (str, optional): process ('ivry_server', 'ivry_cloudflared_tunnel', or 'all')。
                                     defalut 'all'。
             project_path (str, optional): Path to the project directory. If not provided,
         
@@ -614,7 +615,7 @@ class Cli:
             if command not in ["start", "stop", "restart", "reload"]:
                 return f"error: bad command '{command}'.use 'start', 'stop', 'restart' 或 'reload'。"
             
-            valid_processes = ["all", "ivry_server", "cloudflared_tunnel"]
+            valid_processes = ["all", "ivry_server", "ivry_cloudflared_tunnel"]
             if process not in valid_processes:
                 return f"error: bad process '{process}'. accept process: {', '.join(valid_processes)}"
             
@@ -661,7 +662,7 @@ class Cli:
         get pm2 logs
         
         参数:
-            process (str, optional): process ('ivry_server', 'cloudflared_tunnel', or 'all')。
+            process (str, optional): process ('ivry_server', 'ivry_cloudflared_tunnel', or 'all')。
                                     default 'all'。
             lines (int, optional): showing lines of logs。default 20.
             project_path (str, optional): Path to the project directory. If not provided,
@@ -671,7 +672,7 @@ class Cli:
         """
         try:
          
-            valid_processes = ["all", "ivry_server", "cloudflared_tunnel"]
+            valid_processes = ["all", "ivry_server", "ivry_cloudflared_tunnel"]
             if process not in valid_processes:
                 return f"error: bad process '{process}'. accept process: {', '.join(valid_processes)}"
             
@@ -702,7 +703,7 @@ class Cli:
                 if cloudflared_log.exists():
                     result = subprocess.run(["tail", "-n", str(lines), str(cloudflared_log)], 
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    cloudflared_content = f"=== cloudflared_tunnel log===\n{result.stdout}"
+                    cloudflared_content = f"=== ivry_cloudflared_tunnel log===\n{result.stdout}"
                 
                 return ivry_content + cloudflared_content
             else:
