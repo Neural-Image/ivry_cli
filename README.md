@@ -42,6 +42,72 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
 ---
 # Steps to host your app on ivry
 
+# For python creators:
+
+## 1.  Authentication
+
+1. Retrieve your API key from our website.
+2. Login using the CLI:
+   ```bash
+   ivry_cli login --auth_token {your_apikey}
+   ```
+## 2. Create your predict.py 
+
+save your predict.py in 
+
+ivry_cli
+  - predict.py
+  - src
+  - comfyui_workflows
+  - docs
+
+## 3. generate your predict_signature.json
+
+ ```bash
+ ivry_cli parse_predict 
+ ```
+it will generate a predict_signature.json file. We will use it in the next step
+
+## 4. Create your app on ivry website
+
+upload your predict_signature.json
+
+## 5. Pull your app to cli
+
+```bash
+ivry_cli pull_project --app_id your_app_id
+```
+for example:
+ivry_cli pull_project --app_id 66
+
+
+## 6. Host your app
+
+Start both the ivry_cli model server and cloudflared tunnel with a single command:
+
+```bash
+ivry_cli run_server --force
+```
+
+### Specify a different project path
+
+```bash
+ivry_cli run_server --project project_folder_name --force #like app_30
+```
+
+### Stopping the Server
+
+```bash
+# Stop all running ivry services
+ivry_cli stop_server [--project_path PATH] [--force]
+```
+
+The `--force` option allows you to terminate services that may be stuck or not responding to normal shutdown commands.
+
+
+
+# For ComfyUI creators:
+
 ## 1.  Authentication
 
 1. Retrieve your API key from our website.
@@ -73,29 +139,15 @@ ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188 --comfy
 
 ## 4. Hosting Your Project
 
-### Simplified Server Management
-
 Start both the ivry_cli model server and cloudflared tunnel with a single command:
 
 ```bash
-ivry_cli run_server [OPTIONS]
+ivry_cli run_server --force
 ```
 
-#### Options:
-- `--project_path PATH`: Path to your project directory (default: current directory)
-- `--force`: Override and restart even if services are already running
-
-#### Examples:
+### Specify a different project path
 
 ```bash
-# Start in foreground mode (blocks terminal)
-cd my_project
-ivry_cli run_server
-
-# Force restart if already running
-ivry_cli run_server --force
-
-# Specify a different project path
 ivry_cli run_server --project project_folder_name --force #like app_30
 ```
 
