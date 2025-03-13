@@ -1,6 +1,7 @@
 # Updated ivry_cli Documentation
 
 ## 🔥 Updates
+- **2025/03/12**: Support python creators
 - **2025/03/07**: Fixed issues with `run_server` command, now using direct subprocess approach 
 - **2025/03/07**: Added troubleshooting section for common errors
 - **2025/03/07**: Added new `list_apps` command to view all your applications
@@ -42,6 +43,72 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
 ---
 # Steps to host your app on ivry
 
+# For python creators:
+
+## 1.  Authentication
+
+1. Retrieve your API key from our website.
+2. Login using the CLI:
+   ```bash
+   ivry_cli login --auth_token {your_apikey}
+   ```
+## 2. Create your predict.py 
+
+save your predict.py in 
+
+ivry_cli
+  - predict.py
+  - src
+  - comfyui_workflows
+  - docs
+
+## 3. generate your predict_signature.json
+
+ ```bash
+ ivry_cli parse_predict 
+ ```
+it will generate a predict_signature.json file. We will use it in the next step
+
+## 4. Create your app on ivry website
+
+upload your predict_signature.json
+
+## 5. Pull your app to cli
+
+```bash
+ivry_cli pull_project --app_id your_app_id
+```
+for example:
+ivry_cli pull_project --app_id 66
+
+
+## 6. Host your app
+
+Start both the ivry_cli model server and cloudflared tunnel with a single command:
+
+```bash
+ivry_cli run_server --force
+```
+
+### Specify a different project path
+
+```bash
+ivry_cli run_server --project project_folder_name --force #like app_30
+```
+
+### Stopping the Server
+
+```bash
+# Stop all running ivry services
+ivry_cli stop_server [--project_path PATH] [--force]
+```
+
+The `--force` option allows you to terminate services that may be stuck or not responding to normal shutdown commands.
+
+
+
+# For ComfyUI creators:
+
 ## 1.  Authentication
 
 1. Retrieve your API key from our website.
@@ -73,29 +140,15 @@ ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188 --comfy
 
 ## 4. Hosting Your Project
 
-### Simplified Server Management
-
 Start both the ivry_cli model server and cloudflared tunnel with a single command:
 
 ```bash
-ivry_cli run_server [OPTIONS]
+ivry_cli run_server --force
 ```
 
-#### Options:
-- `--project_path PATH`: Path to your project directory (default: current directory)
-- `--force`: Override and restart even if services are already running
-
-#### Examples:
+### Specify a different project path
 
 ```bash
-# Start in foreground mode (blocks terminal)
-cd my_project
-ivry_cli run_server
-
-# Force restart if already running
-ivry_cli run_server --force
-
-# Specify a different project path
 ivry_cli run_server --project project_folder_name --force #like app_30
 ```
 
@@ -187,18 +240,14 @@ If you see "Port 3009 is already in use" errors:
 
 ---
 
-## TODOs
-
-- [ ] update parse_inout for python project
+### Completed Tasks:
+✅ update parse_inout for python project
       - must follow current syntax, must has default values, also with optional values
       - can edit either webite or local
-- [ ] python process
-- [ ] Support web pull
-- [ ] WSL2 package
-- [ ] Heartbeat sending improvements
-
-
-### Completed Tasks:
+✅ python process
+✅ Support web pull
+✅ WSL2 package
+✅ Heartbeat sending improvements
 ✅ Background running mode using direct subprocess approach  
 ✅ Find ComfyUI function in WebUI  
 ✅ Windows version support  
