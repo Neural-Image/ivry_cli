@@ -6,6 +6,7 @@ from business_server import main as start_business_server
 from model_server import main as start_model_server_
 from cog.server.http import parse_args, main as start_model_server
 from communicate import upload_config
+from parse_InOut import parse_predict
 import requests
 import json
 import shutil
@@ -13,6 +14,7 @@ from util import get_apikey, find_comfyui_processes, get_comfyui_install_path, g
 import subprocess
 import signal
 import platform
+
 from heartbeat import HeartbeatManager
 from websocket_comfyui import create_predict
 from pull_project import generate_predict_file
@@ -161,26 +163,30 @@ class Cli:
                 with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json saved to {dest_path}")
-            system_name = platform.uname().release.lower()
-            if "microsoft" in system_name:
-                system_name = "windows"
-                if comfyUI_dir == None:
-                    return "Please enter your comfyUI dir as parameters, its the dir to your custom_nodes's location. For example: ivry_cli pull_project --app_id 66 --comfyUI_dir E:\ComfyUI_windows_portable\ComfyUI_windows_portable\ComfyUI"
+            if data["data"]["type"] == "python":
+                pass
+            else:
                 
-     
-
-
-            if comfyUI_dir == None:
-                comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
-            if not comfyUI_dir:
-                return ("error: cannot find your running comfyUI process " + 
-                        f"{comfyui_port} 上。\n" +
-                        "if your comfyUI process is running, you could add it to the command。like: ivry_cli pull_project 66 --comfyui_port 8188 --comfyUI_dir /path/to/comfyUI")
-            
-            generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
+                system_name = platform.uname().release.lower()
+                if "microsoft" in system_name:
+                    system_name = "windows"
+                    if comfyUI_dir == None:
+                        return "Please enter your comfyUI dir as parameters, its the dir to your custom_nodes's location. For example: ivry_cli pull_project --app_id 66 --comfyUI_dir E:\ComfyUI_windows_portable\ComfyUI_windows_portable\ComfyUI"
+                    
         
+
+
+                if comfyUI_dir == None:
+                    comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
+                if not comfyUI_dir:
+                    return ("error: cannot find your running comfyUI process " + 
+                            f"{comfyui_port} 上。\n" +
+                            "if your comfyUI process is running, you could add it to the command。like: ivry_cli pull_project 66 --comfyui_port 8188 --comfyUI_dir /path/to/comfyUI")
+                
+                generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
+            
     
-            source_path = "predict.py"  
+            source_path = "predict.py"
             destination_path = str(project_path) + "/predict.py"  
             shutil.move(source_path, destination_path)
             shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
@@ -199,6 +205,10 @@ class Cli:
             return "error: invalid response received from the server (not valid JSON)"
         except Exception as e:
             return f"error: {str(e)}"
+        
+        
+    def parse_predict(self, predict_filename: str = "predict.py"):
+        return parse_predict(predict_filename)
 
 
     def list_apps(self):
