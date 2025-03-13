@@ -126,14 +126,14 @@ or
 You need to pass your comfyUI directory
 
 ```bash
-ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188
+ivry_cli pull_project --app_id your_app_id --comfyui_port default_is_8188
 ```
 for example:
 ivry_cli pull_project --app_id 66 # if your are using default settings for comfyUI
 
 or
 ```bash
-ivry_cli pull_project --app_id your_app_id --comfui_port default_is_8188 --comfyUI_dir path_to_your_comfyUI
+ivry_cli pull_project --app_id your_app_id --comfyui_port default_is_8188 --comfyUI_dir path_to_your_comfyUI
 ```
 
 ---
