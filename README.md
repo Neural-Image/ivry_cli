@@ -1,6 +1,7 @@
 # Updated ivry_cli Documentation
 
 ## 🔥 Updates
+- **2025/03/12**: Support python creators
 - **2025/03/07**: Fixed issues with `run_server` command, now using direct subprocess approach 
 - **2025/03/07**: Added troubleshooting section for common errors
 - **2025/03/07**: Added new `list_apps` command to view all your applications
