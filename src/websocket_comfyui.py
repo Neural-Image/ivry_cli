@@ -157,6 +157,16 @@ def get_images(ws, client_id, prompt, server_address):
                     logger.info(f"Found output video: {image['filename']}")
                     images_output.append(image['filename'])
             
+            if 'audios' in node_output:
+                for image in node_output['audios']:
+                    logger.info(f"Found output audios: {image['filename']}")
+                    images_output.append(image['filename'])
+            
+            if 'audio' in node_output:
+                for image in node_output['audio']:
+                    logger.info(f"Found output audio: {image['filename']}")
+                    images_output.append(image['filename'])
+            
             output_images[node_id] = images_output
         
         logger.info(f"Processing complete. Found outputs for {len(output_images)} nodes.")
