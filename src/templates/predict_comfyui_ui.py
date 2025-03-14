@@ -8,7 +8,7 @@ import websocket #NOTE: websocket-client (https://github.com/websocket-client/we
 import uuid
 import json
 import os
-from websocket_comfyui import get_images, queue_prompt, get_history 
+from websocket_comfyui import get_images, queue_prompt, get_history, check_comfyui_connection
 from typing import List
 
 from dotenv import load_dotenv
@@ -42,7 +42,9 @@ class Predictor(BasePredictor):
         # 4.put your workflow api path here:
         workflow_file = {{workflow_dir}}
 
-
+        if check_comfyui_connection(server_address) == False:
+            raise Exception("ComfyUI server is not running")
+        
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
             prompt_config = json.load(workflow_file)
 

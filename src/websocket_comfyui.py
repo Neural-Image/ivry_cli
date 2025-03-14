@@ -8,6 +8,14 @@ import logging
 import time
 import traceback
 import sys
+import socket
+import websocket
+
+
+COMFYUI_CONNECTION_ERROR = "CLI_ERR_1001"  # Cannot connect to ComfyUI
+COMFYUI_WEBSOCKET_ERROR = "CLI_ERR_1002"   # WebSocket connection failed
+COMFYUI_PROCESSING_ERROR = "CLI_ERR_1101"  # Error during ComfyUI processing
+COMFYUI_NO_OUTPUT = "CLI_ERR_1201"        # No output files generated
 
 LOG_FILE = "client.log"
 MIN_INTERVAL = 1  
@@ -72,6 +80,62 @@ def setup_logger():
         logger.addHandler(console_handler)
     
     return logger
+
+def check_comfyui_connection(server_address, timeout=5):
+        """
+        Check if we can connect to the ComfyUI server
+        
+        Args:
+            server_address: ComfyUI server address in format host:port
+            timeout: Connection timeout in seconds
+        
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        # Parse hostname and port
+        try:
+            host, port_str = server_address.split(':')
+            port = int(port_str)
+        except ValueError:
+            print(f"ERROR[{COMFYUI_CONNECTION_ERROR}]: Invalid server address format: {server_address}, should be 'host:port'")
+            return False
+        
+        # Check TCP connection
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            
+            if result != 0:
+                print(f"ERROR[{COMFYUI_CONNECTION_ERROR}]:: Could not connect to {server_address}, port might be closed")
+                return False
+                
+            # Try HTTP connection
+            try:
+                url = f"http://{server_address}/"
+                conn = urllib.request.urlopen(url, timeout=timeout)
+                if conn.getcode() != 200:
+                    print(f"WARNING: ComfyUI server returned status code: {conn.getcode()}")
+            except (urllib.error.URLError, ConnectionRefusedError) as e:
+                print(f"WARNING: HTTP connection check failed: {e}")
+                # Continue execution as some ComfyUI setups might block HTTP requests but still allow WebSocket
+            
+            # Try WebSocket connection
+            try:
+                ws_url = f"ws://{server_address}/ws"
+                ws = websocket.create_connection(ws_url, timeout=timeout)
+                ws.close()
+                return True
+            except Exception as e:
+                print(f"ERROR[{COMFYUI_WEBSOCKET_ERROR}]: WebSocket connection failed: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"ERROR: Exception during connection check: {e}")
+            return False
+
+
 
 def get_images(ws, client_id, prompt, server_address):
     logger = setup_logger()
