@@ -344,7 +344,7 @@ class Cli:
                 return False  
             except socket.error:
                 return True  
-  
+
         if check_port(3009) and not force:
             return ("Port 3009 is already in use, which will prevent ivry_server from starting.\n"
                 "Please stop any existing ivry_server instances first or use --force to attempt restart.")
@@ -358,11 +358,11 @@ class Cli:
                     "restart: ivry_cli pm2_control restart\n"
                     "force start: ivry_cli run_server --force")
             else:
-   
+
                 subprocess.run(["pm2", "delete", "ivry_server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-  
+
         ivry_log_file = (logs_dir / "ivry_server.log").resolve()
         cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
 
@@ -380,14 +380,18 @@ class Cli:
                     "merge_logs": True,
                     "autorestart": True,
                     "env": {
-                        "PM2_HOME": str(project_dir / ".pm2")
+                        "PM2_HOME": str(project_dir / ".pm2"),
+                        "FORCE_COLOR": "0",   
+                        "NO_COLOR": "1",      
+                        "PYTHONIOENCODING": "utf-8",   
+                        "PYTHONUNBUFFERED": "1"       
                     }
                 },
-                # cloudflared configuration remains unchanged
+                # cloudflared configuration
                 {
                     "name": "ivry_cloudflared_tunnel",
                     "script": "cloudflared",
-                    "args": ["tunnel", "--config", "tunnel_config.json", "run"],
+                    "args": ["tunnel", "--config", "tunnel_config.json", "run"], 
                     "cwd": str(project_dir),
                     "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
                     "output": str(cloudflared_log_file),
@@ -395,13 +399,14 @@ class Cli:
                     "merge_logs": True,
                     "autorestart": True,
                     "env": {
-                        "PM2_HOME": str(project_dir / ".pm2")
+                        "PM2_HOME": str(project_dir / ".pm2"),
+                        "NO_COLOR": "1"  
                     }
                 }
             ]
         }
         
-  
+        # 写入配置文件
         with open(pm2_config_path, "w") as f:
             json.dump(pm2_config, f, indent=4)
         
@@ -410,34 +415,11 @@ class Cli:
         print(f"Logs will be written to: {logs_dir}")
         
         try:
-       
+            # 启动PM2进程
             subprocess.run(["pm2", "start", str(pm2_config_path)], check=True)
             
-    
+            # 保存PM2配置
             subprocess.run(["pm2", "save"], check=True)
-            
-            # 
-            # if model_id and model_id != "unknown":
-            #     try:
-            #         global _heartbeat_manager
-            #         apikey = get_apikey()
-            #         upload_url = f"{IVRY_URL}pc/client-api/heartbeat"
-                    
-            #    
-            #         if _heartbeat_manager:
-            #             _heartbeat_manager.stop()
-                    
-            #         
-            #         _heartbeat_manager = HeartbeatManager(
-            #             upload_url=upload_url,
-            #             model_id=model_id,
-            #             api_key=apikey,
-            #             interval=3600  # 默认1小时间隔
-            #         )
-            #         _heartbeat_manager.start()
-            #         print("Heartbeat service started")
-            #     except Exception as e:
-            #         print(f"error: {e}")
             
             return (f"Services started with PM2.\n"
                 f"To view status: ivry_cli pm2_status\n"
