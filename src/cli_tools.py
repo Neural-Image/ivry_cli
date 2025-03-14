@@ -291,7 +291,6 @@ class Cli:
         Args:
             project (str, optional): Path to the project directory. If not provided,
                                         uses the current working directory.
-
             force (bool, optional): If True, forcibly restart services even if they're already running.
                                     Default is False.
         
@@ -358,7 +357,6 @@ class Cli:
                     "restart: ivry_cli pm2_control restart\n"
                     "force start: ivry_cli run_server --force")
             else:
-
                 subprocess.run(["pm2", "delete", "ivry_server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
@@ -379,6 +377,7 @@ class Cli:
                     "error": str(ivry_log_file),
                     "merge_logs": True,
                     "autorestart": True,
+                    "max_size": "1M",
                     "env": {
                         "PM2_HOME": str(project_dir / ".pm2"),
                         "FORCE_COLOR": "0",   
@@ -398,6 +397,7 @@ class Cli:
                     "error": str(cloudflared_log_file),
                     "merge_logs": True,
                     "autorestart": True,
+                    "max_size": "1M",
                     "env": {
                         "PM2_HOME": str(project_dir / ".pm2"),
                         "NO_COLOR": "1"  
@@ -413,6 +413,7 @@ class Cli:
         print(f"Starting ivry_cli model server and cloudflared tunnel for project at: {project_dir}")
         print(f"Model ID: {model_id}")
         print(f"Logs will be written to: {logs_dir}")
+        print(f"Log files will be limited to 1MB each")
         
         try:
             # 启动PM2进程
