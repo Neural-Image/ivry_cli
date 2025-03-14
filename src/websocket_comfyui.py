@@ -206,11 +206,11 @@ def get_images(ws, client_id, prompt, server_address):
             
             node_output = history['outputs'][node_id]
             images_output = []
-            
+            print("node_output",node_output)
             if 'images' in node_output:
                 for image in node_output['images']:
                     logger.info(f"Found output image: {image['filename']}")
-                    if 'subfolder' in image:
+                    if image['subfolder'] != "":
                         subfolder = image['subfolder']
                         images_output.append(subfolder + "/" + image['filename'])
                     else:
@@ -219,7 +219,7 @@ def get_images(ws, client_id, prompt, server_address):
             if 'gifs' in node_output:
                 for image in node_output['gifs']:
                     logger.info(f"Found output gif: {image['filename']}")
-                    if 'subfolder' in image:
+                    if image['subfolder'] != "":
                         subfolder = image['subfolder']
                         images_output.append(subfolder + "/" + image['filename'])
                     else:
@@ -228,7 +228,7 @@ def get_images(ws, client_id, prompt, server_address):
             if 'videos' in node_output:
                 for image in node_output['videos']:
                     logger.info(f"Found output video: {image['filename']}")
-                    if 'subfolder' in image:
+                    if image['subfolder'] != "":
                         subfolder = image['subfolder']
                         images_output.append(subfolder + "/" + image['filename'])
                     else:
@@ -237,7 +237,7 @@ def get_images(ws, client_id, prompt, server_address):
             if 'audios' in node_output:
                 for image in node_output['audios']:
                     logger.info(f"Found output audios: {image['filename']}")
-                    if 'subfolder' in image:
+                    if image['subfolder'] != "":
                         subfolder = image['subfolder']
                         images_output.append(subfolder + "/" + image['filename'])
                     else:
@@ -246,7 +246,7 @@ def get_images(ws, client_id, prompt, server_address):
             if 'audio' in node_output:
                 for image in node_output['audio']:
                     logger.info(f"Found output audio: {image['filename']}")
-                    if 'subfolder' in image:
+                    if image['subfolder'] != "":
                         subfolder = image['subfolder']
                         images_output.append(subfolder + "/" + image['filename'])
                     else:
