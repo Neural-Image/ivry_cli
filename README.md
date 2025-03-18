@@ -38,7 +38,7 @@ For installation instructions on Windows, refer to: [Windows Installation Guide]
    ```
 2. Install the CLI:
    ```bash
-   pip install -e .
+   ./install.sh
    ```
 
 ---
