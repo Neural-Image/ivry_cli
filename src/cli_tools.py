@@ -377,7 +377,8 @@ class Cli:
                     "error": str(ivry_log_file),
                     "merge_logs": True,
                     "autorestart": True,
-                    "max_size": "1M",
+                    "max_size": "2M",
+                    "max_logs": 1,  # 限制为只保留1个日志文件
                     "env": {
                         "PM2_HOME": str(project_dir / ".pm2"),
                         "FORCE_COLOR": "0",   
@@ -397,7 +398,8 @@ class Cli:
                     "error": str(cloudflared_log_file),
                     "merge_logs": True,
                     "autorestart": True,
-                    "max_size": "1M",
+                    "max_size": "2M",
+                    "max_logs": 1,  # 限制为只保留1个日志文件
                     "env": {
                         "PM2_HOME": str(project_dir / ".pm2"),
                         "NO_COLOR": "1"  
