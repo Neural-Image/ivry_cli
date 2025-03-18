@@ -23,7 +23,9 @@ from typing import Optional
 
 #save to current dir
 IVRY_CREDENTIAL_DIR = Path.home() / ".ivry"
+#IVRY_URL = "https://www.ivry.co/"
 IVRY_URL = "https://www.lormul.org/"
+
 # only use predict.py
 IVRY_PREDICT_FILE = "predict.py"
 _heartbeat_manager = None
