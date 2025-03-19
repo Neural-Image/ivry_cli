@@ -19,7 +19,7 @@ Before moving forward, make sure you reboot your computer so that Windows 11 wil
 
 ## 2. Init wsl2 environment
 
-[wsl2 image](https://drive.google.com/file/d/1OK2Sd2Ylwd1J3cMOLr_SgYnhmDdidtOl/view?usp=sharing)
+[wsl2 image](https://drive.google.com/file/d/10vf-E5ylGC6YuHYWnAbQOMaJhIO0WocS/view?usp=sharing)
 
 ### import wsl2 environment
 ```bash
