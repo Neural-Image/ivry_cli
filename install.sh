@@ -2,28 +2,20 @@
 
 # Detect OS
 OS=$(uname -s)
-
 echo "🔍 Detected OS: $OS"
 
 if [[ "$OS" == "Linux" ]]; then
     echo "📦 Updating system packages..."
     sudo apt update
 
-    # Install Node.js (using NodeSource 18.x)
-    echo "📦 Installing/Updating Node.js..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt install -y nodejs npm python3-pip
+    if ! command -v curl &> /dev/null; then
+        echo "📦 Installing curl..."
+        sudo apt install -y curl
+    fi
 
-    # Ensure npm global packages do not require sudo
-    mkdir -p ~/.npm-global
-    npm config set prefix '~/.npm-global'
-    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-    source ~/.bashrc
-
-    # Install Cloudflared
-    echo "📦 Installing Cloudflared..."
-    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-    sudo dpkg -i cloudflared-linux-amd64.deb
+    export NVM_VERSION="v0.40.2"
+    echo "📦 Installing NVM (Node Version Manager)..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash
 
 elif [[ "$OS" == "Darwin" ]]; then
     echo "🍏 Detected macOS system."
@@ -38,27 +30,52 @@ elif [[ "$OS" == "Darwin" ]]; then
     echo "📦 Updating Homebrew..."
     brew update
 
-    # Install Node.js and Python (if missing)
-    if ! command -v node &> /dev/null; then
-        echo "📦 Installing Node.js..."
-        brew install node
-    else
-        echo "✅ Node.js is already installed: $(node -v)"
-    fi
-
-    if ! command -v pip3 &> /dev/null; then
-        echo "📦 Installing Python3 and pip..."
-        brew install python3
-    fi
-
-    # Install Cloudflared
-    echo "📦 Installing Cloudflared..."
-    brew install cloudflare/cloudflare/cloudflared
-
+    # Install Node.js (using NVM)
+    export NVM_VERSION="v0.40.2"
+    echo "📦 Installing NVM (Node Version Manager)..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash
 else
     echo "❌ Unsupported OS: $OS"
     exit 1
 fi
+
+# === Configure NVM in profile file ===
+if [[ $SHELL == */bash ]]; then
+    PROFILE_FILE="$HOME/.bashrc"
+elif [[ $SHELL == */zsh ]]; then
+    PROFILE_FILE="$HOME/.zshrc"
+else
+    PROFILE_FILE="$HOME/.profile"
+fi
+
+# Ensure NVM is added to profile file
+if ! grep -q 'export NVM_DIR' "$PROFILE_FILE"; then
+    echo "📄 Adding NVM configuration to $PROFILE_FILE..."
+    echo 'export NVM_DIR="$HOME/.nvm"' >> "$PROFILE_FILE"
+    echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> "$PROFILE_FILE"
+    echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> "$PROFILE_FILE"
+fi
+
+# Load NVM for current session
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Ensure NVM is installed
+if ! command -v nvm &> /dev/null; then
+    echo "❌ NVM installation failed. Please install it manually."
+    exit 1
+fi
+
+# Install and use the latest LTS version of Node.js
+echo "📦 Installing latest LTS version of Node.js..."
+nvm install --lts
+nvm use --lts
+nvm alias default node
+
+# Install specific Node.js version (23)
+echo "📦 Installing Node.js 23..."
+nvm install 23
+nvm use 23
 
 # Ensure Node.js version >= 16
 NODE_VERSION=$(node -v | cut -d. -f1 | cut -c2-)
@@ -67,7 +84,11 @@ if [[ $NODE_VERSION -lt 16 ]]; then
     exit 1
 fi
 
-# Install PM2 (for all systems)
+# Update npm
+echo "📦 Updating npm..."
+npm install -g npm
+
+# Install PM2
 if ! command -v pm2 &> /dev/null; then
     echo "📦 Installing PM2..."
     npm install -g pm2
@@ -76,8 +97,22 @@ else
     echo "✅ PM2 is already installed: $(pm2 --version)"
 fi
 
+# Install Cloudflared (Linux)
+if [[ "$OS" == "Linux" ]]; then
+    echo "📦 Installing Cloudflared..."
+    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+    sudo dpkg -i cloudflared-linux-amd64.deb
+elif [[ "$OS" == "Darwin" ]]; then
+    echo "📦 Installing Cloudflared..."
+    brew install cloudflare/cloudflare/cloudflared
+fi
+
 # Install Python dependencies
 echo "📦 Installing Python dependencies..."
 pip install -e .
 
 echo "✅ Installation completed."
+
+# Suggest reloading shell
+echo "⚠️ Please run the following command to apply changes:"
+echo "   source $PROFILE_FILE"
