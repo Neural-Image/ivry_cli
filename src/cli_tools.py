@@ -125,7 +125,7 @@ class Cli:
         
         apikey = get_apikey()
         headers = {
-            'X-Dev-Token': str(apikey),
+            'X-API-KEY': str(apikey),
             'Content-Type': 'application/json',
         }
         project_dir = Path("ivry_project/comfyUI_project")
@@ -229,7 +229,7 @@ class Cli:
             
             # Set up request headers
             headers = {
-                'X-Dev-Token': str(apikey),
+                'X-API-KEY': str(apikey),
                 'Content-Type': 'application/json',
             }
             
