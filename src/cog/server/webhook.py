@@ -108,7 +108,7 @@ def requests_session() -> requests.Session:
     # trunc log
 
     apikey = get_apikey()
-    session.headers["X-Dev-Token"] = str(apikey)
+    session.headers["X-API-KEY"] = str(apikey)
 
     return session
 
