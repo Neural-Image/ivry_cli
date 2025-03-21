@@ -85,24 +85,27 @@ ivry_cli pull_project --app_id 66
 
 ## 6. Host your app
 
-Start both the ivry_cli model server and cloudflared tunnel with a single command:
+Start both the ivry_cli model server and cloudflared tunnel:
 
-```bash
-ivry_cli run_server --force
-```
+ ```bash
+ cd path/to/your/app
+ ivry_cli run_server --force
+ ```
 
-### Specify a different project path
+### Specify a project path
 
-```bash
-ivry_cli run_server --project project_folder_name --force #like app_30
-```
+ Please make sure your current path is at the root directory of the cli
+
+ ```bash
+ ivry_cli run_server --project project_folder_name --force #like app_30
+ ```
 
 ### Stopping the Server
 
-```bash
-# Stop all running ivry services
-ivry_cli stop_server [--project_path PATH] [--force]
-```
+ ```bash
+ # Stop all running ivry services
+ ivry_cli stop_server [--project_path PATH] [--force]
+ ```
 
 The `--force` option allows you to terminate services that may be stuck or not responding to normal shutdown commands.
 
