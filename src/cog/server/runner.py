@@ -517,7 +517,11 @@ class PredictTask(Task[schema.PredictionResponse]):
             # TODO: clean up output files
             original_output = output
             uploaded_output = self._file_uploader(output)
-            self._cleanup_original_files(original_output)
+            keep_files = getattr(self._p, 'keep_output_files', False)
+            if not keep_files:
+                self._cleanup_original_files(original_output)
+            else:
+                self._log.info("Keeping output files as requested by keep_output_files=True")
             return uploaded_output
         except (FileNotFoundError, NotADirectoryError):
             # These error cases indicate that an output path returned by a prediction does

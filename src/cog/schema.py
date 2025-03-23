@@ -72,6 +72,8 @@ class PredictionRequest(PredictionBaseModel):
     # TODO: deprecate this
     output_file_prefix: Optional[str] = None
 
+    keep_output_files: Optional[bool] = False
+
     webhook: Optional[WebhookUrl] = None
     webhook_events_filter: Optional[List[WebhookEvent]] = pydantic.Field(
         default=WebhookEvent.default_events(),
