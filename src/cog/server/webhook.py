@@ -80,11 +80,23 @@ def webhook_caller(webhook: str) -> Callable[[Any], None]:
             
             if Status.is_terminal(response.status):
                 # For terminal updates, retry persistently
-                retry_session.post(webhook, json=dict_response)
+                webhook_response = retry_session.post(webhook, json=dict_response)
+                if webhook_response.status_code != 200:
+                    log.error(
+                        "webhook failed",
+                        status_code=webhook_response.status_code,
+                        response=webhook_response.text,
+                    )
             else:
                 # For other requests, don't retry, and ignore any errors
                 try:
-                    default_session.post(webhook, json=dict_response)
+                    webhook_response = default_session.post(webhook, json=dict_response)
+                    if webhook_response.status_code != 200:
+                        log.error(
+                            "webhook failed",
+                            status_code=webhook_response.status_code,
+                            response=webhook_response.text,
+                        )
                 except requests.exceptions.RequestException:
                     log.warn("caught exception while sending webhook", exc_info=True)
             throttler.update_last_sent_response_time()
