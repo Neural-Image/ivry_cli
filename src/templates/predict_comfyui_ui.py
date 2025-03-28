@@ -10,9 +10,28 @@ import json
 import os
 from websocket_comfyui import get_images, queue_prompt, get_history, check_comfyui_connection
 from typing import List
+import subprocess
+from typing import Dict, List, Any, Optional, Tuple, Union
+
 
 from dotenv import load_dotenv
 load_dotenv()
+
+
+def get_local_ip(port: Union[str, int]) -> str:
+    """Get the local IP address"""
+    try:
+        result = subprocess.check_output(
+            "ip route | grep default | awk '{print $3}'", 
+            shell=True, 
+            text=True,
+            timeout=5
+        ).strip()
+        return f"{result}:{port}"
+    except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+        return f"127.0.0.1:{port}"
+
+
 
 # 1.Please put your comfyUI path here:
 COMFYUI_PATH = {{dir_comfyui}}
@@ -25,6 +44,8 @@ class Predictor(BasePredictor):
         pass
 
     
+
+
 
     # 3.put your inputs here:
     """

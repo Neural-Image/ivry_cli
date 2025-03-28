@@ -145,7 +145,7 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     port_str = port_comfyui
     
     if os_system == "windows":
-        port_str = get_local_ip(port_comfyui)
+        port_str = f"get_local_ip({port_comfyui})"
         dir_comfyui = win_path_to_wsl_path(dir_comfyui)
         wsl_name = get_wsl_distro_name()
     else:
@@ -200,7 +200,10 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
         json.dump(workflow_api_json, f, ensure_ascii=False, indent=4)
 
     content = content.replace("{{dir_comfyui}}", f"'{dir_comfyui}'")
-    content = content.replace("{{port_comfyui}}", f"'{port_str}'")
+    if os_system == "windows":
+        content = content.replace("{{port_comfyui}}", f"{port_str}")
+    else:
+        content = content.replace("{{port_comfyui}}", f"'{port_str}'")
     content = content.replace("{{input_section}}", input_parameter)
     content = content.replace("{{workflow_dir}}", f"r'{workflow_path}'")
     content = content.replace("{{logic_section}}", logic_section)

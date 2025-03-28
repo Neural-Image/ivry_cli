@@ -101,6 +101,19 @@ class Cli:
         return {"running": False, "message": "Heartbeat service not started"}
 
 
+    def win_path_to_wsl_path(self, win_path: str) -> str:
+        """Convert a Windows path to a WSL path"""
+        if not win_path:
+            return ""
+        # Convert backslashes to forward slashes
+        path_unix = win_path.replace("\\", "/")
+        # Check if the path starts with a drive letter
+        if len(path_unix) >= 2 and path_unix[1] == ':':
+            drive_letter = path_unix[0].lower()
+            path_unix = "/mnt/" + drive_letter + path_unix[2:]
+        return path_unix
+
+
 
 
     def pull_project(self, app_id: str, comfyui_port: str = "8188", project_name: str = None, comfyUI_dir: str = None):
@@ -174,8 +187,15 @@ class Cli:
                     system_name = "windows"
                     if comfyUI_dir == None:
                         return "Please enter your comfyUI dir as parameters, its the dir to your custom_nodes's location. For example: ivry_cli pull_project --app_id 66 --comfyUI_dir E:\ComfyUI_windows_portable\ComfyUI_windows_portable\ComfyUI"
-                    
-        
+                    win_path = comfyUI_dir
+                    wsl_dir = self.win_path_to_wsl_path(win_path)
+                    check_path_cmd = f"test -d '{wsl_dir}' && echo 'exists' || echo 'not_exists'"
+                    result = subprocess.run(check_path_cmd, shell=True, capture_output=True, text=True)
+                    if "not_exists" in result.stdout:
+                        return (f"Error: The ComfyUI directory path '{comfyUI_dir}' doesn't exist in WSL after conversion to '{wsl_dir}'.\n"
+                                f"Please check the path and make sure it's accessible from WSL.")
+                    print(f"ComfyUI directory path '{comfyUI_dir}' validated, converted to WSL path '{wsl_dir}'")
+
 
 
                 if comfyUI_dir == None:
