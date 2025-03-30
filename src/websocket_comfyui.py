@@ -188,7 +188,11 @@ def get_images(ws, client_id, prompt, server_address):
             except Exception as e:
                 error_msg = f"Error processing websocket message: {str(e)}\n{traceback.format_exc()}"
                 logger.error(error_msg)
-                # Don't break the loop for individual message errors
+                if isinstance(e, (ConnectionError, BrokenPipeError, websocket.WebSocketException)):
+                    raise RuntimeError(f"WebSocket error: {str(e)}")
+                
+                if "memory" in str(e).lower() or "oom" in str(e).lower():
+                    raise RuntimeError(f"memory issue: {str(e)}")
         
         # Check if there were any execution errors
         if execution_errors:
