@@ -31,6 +31,12 @@ from ..logging import setup_logging
 from ..mode import Mode
 from ..types import PYDANTIC_V2
 
+from pathlib import Path
+import uuid
+from datetime import datetime
+import traceback
+
+
 try:
     from .._version import __version__
 except ImportError:
@@ -227,30 +233,21 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
 
             tools = {}
             
-            if not os.path.exists(tools_dir):
-                return tools
-                
-     
-            for filename in os.listdir(tools_dir):
-                if filename.endswith('.py') and not filename.startswith('_'):
-                    module_name = filename[:-3]  
-                    
-                    try:
-                        spec = importlib.util.spec_from_file_location(
-                            module_name, 
-                            os.path.join(tools_dir, filename)
-                        )
-                        if spec is None or spec.loader is None:
-                            continue
-                            
-                        module = importlib.util.module_from_spec(spec)
-                        sys.modules[module_name] = module
-                        spec.loader.exec_module(module)
-                        
-                        if hasattr(module, 'tool_definition') and hasattr(module, 'tool_function'):
-                            tools[module.tool_definition["function"]["name"]] = module.tool_function
-                    except Exception as e:
-                        log.error(f"Error loading tool from {filename}: {e}")
+            import requests  # 确保导入requests库
+    
+            def get_current_weather(latitude, longitude):
+                print(f"Fetching weather data for latitude: {latitude}, longitude: {longitude}")
+                url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m&hourly=temperature_2m&daily=sunrise,sunset&timezone=auto"
+                try:
+                    response = requests.get(url)
+                    response.raise_for_status()
+                    return response.json()
+                except requests.RequestException as e:
+                    print(f"Error fetching weather data: {e}")
+                    return {"error": str(e)}
+            
+            # 将天气工具添加到工具字典
+            tools["get_current_weather"] = get_current_weather
                         
             return tools
 
@@ -259,7 +256,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             tools = []
             
             # 首先查找工具定义目录
-            tools_def_dir = "./tools_definitions"
+            tools_def_dir = "./tools"
             
             if os.path.exists(tools_def_dir):
                 # 从JSON文件加载工具定义
@@ -286,11 +283,11 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                             "properties": {
                                 "latitude": {
                                     "type": "number",
-                                    "description": "The latitude of the location",
+                                    "description": "The latitude of the location"
                                 },
                                 "longitude": {
                                     "type": "number",
-                                    "description": "The longitude of the location",
+                                    "description": "The longitude of the location"
                                 },
                             },
                             "required": ["latitude", "longitude"],
@@ -300,20 +297,46 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             
             return tools
 
+        # 在 create_verbal_labs_routes 函数内部添加一个日志功能
         async def stream_chat_completion(client_messages: List[Dict[str, Any]], 
-                                        tools: List[Dict[str, Any]], 
-                                        protocol: str) -> AsyncGenerator[str, None]:
+                                tools: List[Dict[str, Any]], 
+                                protocol: str) -> AsyncGenerator[str, None]:
             """
             流式返回聊天完成结果
             """
-            # 获取API密钥
+            # 创建日志目录
+            logs_dir = Path("./logs/api_requests")
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 创建一个唯一的日志文件名
+            log_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_id = f"{log_timestamp}_{uuid.uuid4().hex[:8]}"
+            log_file = logs_dir / f"openai_request_{log_id}.json"
+            log_response_file = logs_dir / f"openai_response_{log_id}.txt"
+            debug_log_file = logs_dir / f"openai_debug_{log_id}.txt"
+            
+            # 创建调试日志文件
+            debug_log = open(debug_log_file, 'w', encoding='utf-8')
+            debug_log.write(f"=== DEBUG LOG (ID: {log_id}) ===\n\n")
+            debug_log.write(f"[DEBUG] Starting stream_chat_completion at {datetime.now().isoformat()}\n")
+            debug_log.write(f"[DEBUG] Protocol: {protocol}\n")
+            debug_log.write(f"[DEBUG] Messages count: {len(client_messages)}\n")
+            debug_log.write(f"[DEBUG] Tools count: {len(tools)}\n")
+            debug_log.flush()
+            
+            # 记录请求
             openai_api_key = "sk-proj-U5bRRw2dz9uYLKi2Vh4ET3BlbkFJEaMqgvT8HCeb2UDfzF0b"
             if not openai_api_key:
+                debug_log.write("[DEBUG] Error: OpenAI API key not set\n")
+                debug_log.close()
                 yield json.dumps({"error": "OpenAI API key not set"})
                 return
 
             model = os.environ.get("OPENAI_MODEL", "gpt-4o")
             api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+            
+            debug_log.write(f"[DEBUG] Using model: {model}\n")
+            debug_log.write(f"[DEBUG] Using API base: {api_base}\n")
             
             # 准备API请求
             headers = {
@@ -330,101 +353,325 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             if tools:
                 payload["tools"] = tools
             
+            # 记录请求到日志文件
+            try:
+                with open(log_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        "timestamp": log_timestamp,
+                        "request": {
+                            "url": f"{api_base}/chat/completions",
+                            "headers": headers,
+                            "payload": payload
+                        }
+                    }, f, indent=2, ensure_ascii=False)
+                debug_log.write(f"[DEBUG] Request logged to {log_file}\n")
+            except Exception as e:
+                debug_log.write(f"[DEBUG] Failed to write request log: {e}\n")
+                debug_log.flush()
+            
             # 存储工具调用状态
             draft_tool_calls = []
             draft_tool_calls_index = -1
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{api_base}/chat/completions", 
-                    headers=headers, 
-                    json=payload
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        yield json.dumps({"error": f"OpenAI API error: {response.status} - {error_text}"})
-                        return
+            # 打开响应日志文件
+            try:
+                response_log = open(log_response_file, 'w', encoding='utf-8')
+                response_log.write(f"=== OPENAI API RESPONSE LOG (ID: {log_id}) ===\n\n")
+                debug_log.write(f"[DEBUG] Response log file opened: {log_response_file}\n")
+            except Exception as e:
+                debug_log.write(f"[DEBUG] Failed to open response log file: {e}\n")
+                debug_log.flush()
+                response_log = None
+            
+            try:
+                debug_log.write(f"[DEBUG] Creating aiohttp session at {datetime.now().isoformat()}\n")
+                debug_log.flush()
+                
+                async with aiohttp.ClientSession() as session:
+                    debug_log.write(f"[DEBUG] Sending POST request to {api_base}/chat/completions\n")
+                    debug_log.flush()
                     
-                    # 解析Stream响应
-                    async for line in response.content:
-                        line = line.strip()
-                        if not line:
-                            continue
-                            
-                        if line.startswith(b"data: "):
-                            data = line[6:].decode('utf-8')
-                            if data == "[DONE]":
-                                if protocol == 'vercel':
-                                    yield f'e:{{"finishReason":"stop","usage":{{"promptTokens":0,"completionTokens":0}},"isContinued":false}}\n'
-                                else:
-                                    yield "data: [DONE]\n\n"
+                    async with session.post(
+                        f"{api_base}/chat/completions", 
+                        headers=headers, 
+                        json=payload
+                    ) as response:
+                        debug_log.write(f"[DEBUG] Received response with status: {response.status}\n")
+                        debug_log.flush()
+                        
+                        if response.status != 200:
+                            error_text = await response.text()
+                            error_message = f"OpenAI API error: {response.status} - {error_text}"
+                            debug_log.write(f"[DEBUG] Error: {error_message}\n")
+                            debug_log.flush()
+                            if response_log:
+                                response_log.write(f"ERROR: {error_message}\n")
+                            yield json.dumps({"error": error_message})
+                            return
+                        
+                        # 解析Stream响应
+                        complete_response = ""  # 用于收集完整响应
+                        line_count = 0
+                        tool_call_complete = False
+                        has_final_response = False
+                        
+                        debug_log.write("[DEBUG] Starting to process response stream\n")
+                        debug_log.flush()
+                        
+                        async for line in response.content:
+                            line_count += 1
+                            line = line.strip()
+                            if not line:
                                 continue
+                            
+                            line_str = line.decode('utf-8')
+                            debug_log.write(f"[DEBUG] Line {line_count}: {line_str}\n")
+                            debug_log.flush()
+                            
+                            # 记录原始响应行到日志
+                            if response_log:
+                                response_log.write(f"{line_str}\n")
+                                response_log.flush()
                                 
-                            try:
-                                chunk = json.loads(data)
-                                choice = chunk.get("choices", [{}])[0]
-                                delta = choice.get("delta", {})
-                                content = delta.get("content")
-                                
-                                # 处理常规内容
-                                if content is not None:
+                            if line.startswith(b"data: "):
+                                data = line[6:].decode('utf-8')
+                                if data == "[DONE]":
+                                    debug_log.write(f"[DEBUG] Received [DONE] marker at line {line_count}\n")
+                                    debug_log.flush()
+                                    
                                     if protocol == 'vercel':
-                                        yield f'0:{json.dumps(content)}\n'
+                                        result = f'e:{{"finishReason":"stop","usage":{{"promptTokens":0,"completionTokens":0}},"isContinued":false}}\n'
                                     else:
-                                        yield f"data: {json.dumps({'content': content})}\n\n"
-                                
-                                # 处理工具调用
-                                tool_calls = delta.get("tool_calls", [])
-                                if tool_calls:
-                                    for tool_call in tool_calls:
+                                        result = "data: [DONE]\n\n"
+                                        
+                                    if response_log:
+                                        response_log.write(f"\n=== YIELDING: {result} ===\n")
+                                        response_log.flush()
+                                        
+                                    yield result
+                                    
+                                    debug_log.write("[DEBUG] Stream ended with [DONE]\n")
+                                    debug_log.write(f"[DEBUG] Tool call complete: {tool_call_complete}\n")
+                                    debug_log.write(f"[DEBUG] Has final response: {has_final_response}\n")
+                                    debug_log.flush()
+                                    
+                                    # 检查是否需要获取最终回复
+                                    if tool_call_complete and not has_final_response:
+                                        debug_log.write("[DEBUG] Tool call is complete but no final response yet. Should request final response.\n")
+                                        debug_log.flush()
+                                    
+                                    continue
+                                    
+                                try:
+                                    chunk = json.loads(data)
+                                    debug_log.write(f"[DEBUG] Parsed JSON chunk: {json.dumps(chunk)[:100]}...\n")
+                                    debug_log.flush()
+                                    
+                                    choice = chunk.get("choices", [{}])[0]
+                                    delta = choice.get("delta", {})
+                                    content = delta.get("content")
+                                    
+                                    # 检查是否有最终回复
+                                    if content is not None:
+                                        has_final_response = True
+                                        debug_log.write(f"[DEBUG] Received content: {content}\n")
+                                        debug_log.flush()
+                                        
+                                        complete_response += content
                                         if protocol == 'vercel':
+                                            result = f'0:{json.dumps(content)}\n'
+                                        else:
+                                            result = f"data: {json.dumps({'content': content})}\n\n"
+                                        
+                                        if response_log:
+                                            response_log.write(f"\n=== YIELDING: {result} ===\n")
+                                            response_log.flush()
+                                        yield result
+                                    
+                                    # 处理工具调用
+                                    tool_calls = delta.get("tool_calls", [])
+                                    if tool_calls:
+                                        debug_log.write(f"[DEBUG] Received tool calls: {json.dumps(tool_calls)}\n")
+                                        debug_log.flush()
+                                        
+                                        if response_log:
+                                            response_log.write(f"\n=== TOOL CALLS: {json.dumps(tool_calls)} ===\n")
+                                            response_log.flush()
+                                        
+                                        for tool_call in tool_calls:
+                                      
                                             # Vercel格式处理
                                             id_val = tool_call.get("id")
                                             function = tool_call.get("function", {})
                                             name = function.get("name")
                                             arguments = function.get("arguments", "")
                                             
-                                            if id_val is not None:
-                                                draft_tool_calls_index += 1
-                                                draft_tool_calls.append({
-                                                    "id": id_val,
-                                                    "name": name,
-                                                    "arguments": ""
-                                                })
-                                            elif arguments and draft_tool_calls:
-                                                draft_tool_calls[draft_tool_calls_index]["arguments"] += arguments
-                                        else:
-                                            # 标准SSE格式
-                                            yield f"data: {json.dumps({'tool_call': tool_call})}\n\n"
-                                
-                                # 处理完成的工具调用
-                                finish_reason = choice.get("finish_reason")
-                                if finish_reason == "tool_calls" and protocol == 'vercel':
-                                    # 发送工具调用
-                                    for tool_call in draft_tool_calls:
-                                        yield f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{tool_call["arguments"]}}}\n'
                                     
-                                    # 获取用户工具
-                                    tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
-                                    available_tools = load_user_tools(tools_dir)
+                                            draft_tool_calls_index += 1
+                                            draft_tool_calls.append({
+                                                "id": id_val,
+                                                "name": name,
+                                                "arguments": ""
+                                            })
+                                            debug_log.write(f"[DEBUG] Added new tool call with id: {id_val}, name: {name}\n")
+
+                        
                                     
-                                    # 执行工具并发送结果
-                                    for tool_call in draft_tool_calls:
-                                        try:
-                                            tool_name = tool_call["name"]
-                                            tool_args = json.loads(tool_call["arguments"])
+                                    # 处理完成的工具调用
+                                    finish_reason = choice.get("finish_reason")
+                                    if finish_reason == "tool_calls":
+                                        tool_call_complete = True
+                                        debug_log.write(f"[DEBUG] Tool call complete. finish_reason: {finish_reason}\n")
+                                        debug_log.write(f"[DEBUG] Complete draft tool calls: {json.dumps(draft_tool_calls)}\n")
+                                        debug_log.flush()
+                                        
+                                        if response_log:
+                                            response_log.write(f"\n=== FINISH REASON: tool_calls, DRAFT CALLS: {json.dumps(draft_tool_calls)} ===\n")
+                                            response_log.flush()
+                                        
+                                        # 发送工具调用
+                                        for tool_call in draft_tool_calls:
+                                            result = f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{tool_call["arguments"]}}}\n'
+                                            debug_log.write(f"[DEBUG] Yielding tool call: {result}\n")
+                                            debug_log.flush()
                                             
-                                            if tool_name in available_tools:
-                                                tool_result = available_tools[tool_name](**tool_args)
-                                                yield f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{json.dumps(tool_result)}}}\n'
-                                            else:
-                                                yield f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"Tool not found"}}}}\n'
-                                        except Exception as e:
-                                            yield f'a:{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"{str(e)}"}}}\n'
+                                            if response_log:
+                                                response_log.write(f"\n=== YIELDING TOOL CALL: {result} ===\n")
+                                                response_log.flush()
+                                            yield result
+                                        
+                                        # 获取用户工具
+                                        tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
+                                        debug_log.write(f"[DEBUG] Loading tools from: {tools_dir}\n")
+                                        debug_log.flush()
+                                        
+                                        available_tools = load_user_tools(tools_dir)
+                                        debug_log.write(f"[DEBUG] Available tools: {list(available_tools.keys())}\n")
+                                        debug_log.flush()
+                                        
+                                        # 执行工具并发送结果
+                                        
+                                        for tool_call in draft_tool_calls:
+                                            try:
+                                                tool_name = tool_call["name"]
+                                                debug_log.write(f"[DEBUG] Processing tool call: {tool_name}\n")
+                                                debug_log.flush()
+                                                
+                                                tool_args_str = tool_call["arguments"]
+                                                debug_log.write(f"[DEBUG] Tool arguments string: {tool_args_str}\n")
+                                                debug_log.flush()
+                                                
+                                                try:
+                                                    tool_args = json.loads(tool_args_str)
+                                                    debug_log.write(f"[DEBUG] Parsed tool arguments: {json.dumps(tool_args)}\n")
+                                                except json.JSONDecodeError as e:
+                                                    debug_log.write(f"[DEBUG] Failed to parse tool arguments: {e}\n")
+                                                    tool_args = {}
+                                                
+                                                if tool_name in available_tools:
+                                                    debug_log.write(f"[DEBUG] Executing tool: {tool_name}\n")
+                                                    debug_log.flush()
+                                                    
+                                                    tool_result = available_tools[tool_name](**tool_args)
+                                                    debug_log.write(f"[DEBUG] Tool result: {json.dumps(tool_result)}\n")
+                                                    debug_log.flush()
+                                                    
+                                                    result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{json.dumps(tool_result)}}}\n'
+                                                else:
+                                                    debug_log.write(f"[DEBUG] Tool not found: {tool_name}\n")
+                                                    debug_log.flush()
+                                                    
+                                                    result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"Tool not found"}}}}\n'
+                                                
+                                                debug_log.write(f"[DEBUG] Yielding tool result: {result}\n")
+                                                debug_log.flush()
+                                                
+                                                if response_log:
+                                                    response_log.write(f"\n=== YIELDING TOOL RESULT: {result} ===\n")
+                                                    response_log.flush()
+                                                yield result
+                                                
+                                            except Exception as e:
+                                                debug_log.write(f"[DEBUG] Error executing tool: {e}\n{traceback.format_exc()}\n")
+                                                debug_log.flush()
+                                                
+                                                error_message = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"{str(e)}"}}}}\n'
+                                                if response_log:
+                                                    response_log.write(f"\n=== YIELDING ERROR: {error_message} ===\n")
+                                                    response_log.flush()
+                                                yield error_message
+                                        
+                                        # 检查是否需要请求最终回复
+                                        debug_log.write("[DEBUG] Tool execution complete. Checking if we need to request final answer...\n")
+                                        if not has_final_response:
+                                            debug_log.write("[DEBUG] No final response yet. A second request might be needed.\n")
+                                            # 这里可以添加代码来发起第二个请求获取最终回复
+                                
+                                except json.JSONDecodeError:
+                                    error_message = f"Failed to parse JSON: {data}"
+                                    debug_log.write(f"[DEBUG] {error_message}\n")
+                                    debug_log.flush()
+                                    if response_log:
+                                        response_log.write(f"ERROR: {error_message}\n")
+                                        response_log.flush()
+                                    continue
+                        
+                        # 请求结束后，检查是否有工具调用但没有最终回复
+                        debug_log.write(f"[DEBUG] Stream processing complete. line_count={line_count}, tool_call_complete={tool_call_complete}, has_final_response={has_final_response}\n")
+                        
+                        if tool_call_complete and not has_final_response:
+                            debug_log.write("[DEBUG] Tool call completed but no final response. A second request is needed.\n")
+                            debug_log.write("[DEBUG] This appears to be an OpenAI API behavior - tool calls and final response are handled in separate requests.\n")
                             
-                            except json.JSONDecodeError:
-                                log.error(f"Failed to parse JSON: {data}")
-                                continue
+                            # 在这里添加代码来发起第二个请求以获取最终回复
+                            # 例如：
+                            debug_log.write("[DEBUG] Preparing to make second request for final answer...\n")
+                            debug_log.flush()
+                            
+                            # 准备第二个请求 - 这只是一个示例，实际代码需要根据你的需求调整
+                            second_messages = client_messages.copy()
+                            
+                            # 添加工具结果消息
+                            for tool_call in draft_tool_calls:
+                                if tool_name in available_tools:
+                                    try:
+                                        tool_args = json.loads(tool_call["arguments"])
+                                        tool_result = available_tools[tool_name](**tool_args)
+                                        
+                                        # 添加工具结果消息
+                                        second_messages.append({
+                                            "role": "tool",
+                                            "tool_call_id": tool_call["id"],
+                                            "content": json.dumps(tool_result)
+                                        })
+                                        
+                                        debug_log.write(f"[DEBUG] Added tool result to second request: {json.dumps(tool_result)}\n")
+                                    except Exception as e:
+                                        debug_log.write(f"[DEBUG] Failed to add tool result: {str(e)}\n")
+                            
+                            debug_log.write("[DEBUG] Second request would be needed for final answer, but not implemented in this version.\n")
+                        
+                        # 记录完整响应到日志
+                        if response_log:
+                            response_log.write(f"\n\n=== COMPLETE RESPONSE ===\n{complete_response}\n")
+                            response_log.flush()
+                        
+                        debug_log.write(f"[DEBUG] Stream processing finished at {datetime.now().isoformat()}\n")
+                        debug_log.flush()
+            except Exception as e:
+                error_message = f"Error in stream_chat_completion: {str(e)}\n{traceback.format_exc()}"
+                debug_log.write(f"[DEBUG] CRITICAL ERROR: {error_message}\n")
+                debug_log.flush()
+                if response_log:
+                    response_log.write(f"CRITICAL ERROR: {error_message}\n")
+                    response_log.flush()
+                yield json.dumps({"error": str(e)})
+            finally:
+                # 确保关闭日志文件
+                if response_log:
+                    response_log.close()
+                debug_log.write(f"[DEBUG] Function stream_chat_completion ended at {datetime.now().isoformat()}\n")
+                debug_log.close()
 
         @app.post("/api/chat")
         async def handle_chat(request: ChatRequest, protocol: str = Query('data')):
