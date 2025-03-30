@@ -123,6 +123,351 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
         # version=None # TODO
     )
 
+    ### Add Verbal Labs API functions
+    def create_verbal_labs_routes(app):
+
+        from fastapi import Query, Request
+        from fastapi.responses import StreamingResponse
+        from pydantic import BaseModel
+        from typing import List, Dict, Any, Optional, AsyncGenerator
+        import json
+        import os
+        import importlib.util
+        import sys
+        import aiohttp
+        import asyncio
+
+        
+        class ClientAttachment(BaseModel):
+            name: str
+            contentType: str
+            url: str
+
+        class ToolInvocationState(str, Enum):
+            CALL = 'call'
+            PARTIAL_CALL = 'partial-call'
+            RESULT = 'result'
+
+        class ToolInvocation(BaseModel):
+            state: ToolInvocationState
+            toolCallId: str
+            toolName: str
+            args: Any
+            result: Optional[Any] = None
+
+        class ClientMessage(BaseModel):
+            role: str
+            content: str
+            experimental_attachments: Optional[List[ClientAttachment]] = None
+            toolInvocations: Optional[List[ToolInvocation]] = None
+        
+        class ChatRequest(BaseModel):
+            messages: List[ClientMessage]
+
+        def convert_to_openai_messages(messages: List[ClientMessage]) -> List[Dict[str, Any]]:
+           
+            openai_messages = []
+
+            for message in messages:
+                parts = []
+                tool_calls = []
+
+                parts.append({
+                    'type': 'text',
+                    'text': message.content
+                })
+
+                if message.experimental_attachments:
+                    for attachment in message.experimental_attachments:
+                        if attachment.contentType.startswith('image'):
+                            parts.append({
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': attachment.url
+                                }
+                            })
+                        elif attachment.contentType.startswith('text'):
+                            parts.append({
+                                'type': 'text',
+                                'text': attachment.url
+                            })
+
+                if message.toolInvocations:
+                    for toolInvocation in message.toolInvocations:
+                        tool_calls.append({
+                            "id": toolInvocation.toolCallId,
+                            "type": "function",
+                            "function": {
+                                "name": toolInvocation.toolName,
+                                "arguments": json.dumps(toolInvocation.args)
+                            }
+                        })
+
+                tool_calls_dict = {"tool_calls": tool_calls} if tool_calls else {}
+
+                openai_messages.append({
+                    "role": message.role,
+                    "content": parts if len(parts) > 1 else parts[0]["text"],
+                    **tool_calls_dict,
+                })
+
+                if message.toolInvocations:
+                    for toolInvocation in message.toolInvocations:
+                        if toolInvocation.result is not None:
+                            tool_message = {
+                                "role": "tool",
+                                "tool_call_id": toolInvocation.toolCallId,
+                                "content": json.dumps(toolInvocation.result),
+                            }
+                            openai_messages.append(tool_message)
+
+            return openai_messages
+
+        def load_user_tools(tools_dir: str) -> Dict[str, Any]:
+
+            tools = {}
+            
+            if not os.path.exists(tools_dir):
+                return tools
+                
+     
+            for filename in os.listdir(tools_dir):
+                if filename.endswith('.py') and not filename.startswith('_'):
+                    module_name = filename[:-3]  
+                    
+                    try:
+                        spec = importlib.util.spec_from_file_location(
+                            module_name, 
+                            os.path.join(tools_dir, filename)
+                        )
+                        if spec is None or spec.loader is None:
+                            continue
+                            
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = module
+                        spec.loader.exec_module(module)
+                        
+                        if hasattr(module, 'tool_definition') and hasattr(module, 'tool_function'):
+                            tools[module.tool_definition["function"]["name"]] = module.tool_function
+                    except Exception as e:
+                        log.error(f"Error loading tool from {filename}: {e}")
+                        
+            return tools
+
+        def prepare_tools_for_api(available_tools: Dict[str, Any]) -> List[Dict[str, Any]]:
+ 
+            tools = []
+            
+            # 首先查找工具定义目录
+            tools_def_dir = "./tools_definitions"
+            
+            if os.path.exists(tools_def_dir):
+                # 从JSON文件加载工具定义
+                for filename in os.listdir(tools_def_dir):
+                    if filename.endswith('.json'):
+                        try:
+                            with open(os.path.join(tools_def_dir, filename), 'r') as f:
+                                tool_def = json.load(f)
+                                if isinstance(tool_def, dict) and "function" in tool_def and "name" in tool_def["function"]:
+                                    if tool_def["function"]["name"] in available_tools:
+                                        tools.append(tool_def)
+                        except Exception as e:
+                            log.error(f"Error loading tool definition from {filename}: {e}")
+            
+            # 如果没有找到工具定义，使用天气工具作为默认
+            if not tools:
+                tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": "get_current_weather",
+                        "description": "Get the current weather at a location",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "latitude": {
+                                    "type": "number",
+                                    "description": "The latitude of the location",
+                                },
+                                "longitude": {
+                                    "type": "number",
+                                    "description": "The longitude of the location",
+                                },
+                            },
+                            "required": ["latitude", "longitude"],
+                        },
+                    },
+                })
+            
+            return tools
+
+        async def stream_chat_completion(client_messages: List[Dict[str, Any]], 
+                                        tools: List[Dict[str, Any]], 
+                                        protocol: str) -> AsyncGenerator[str, None]:
+            """
+            流式返回聊天完成结果
+            """
+            # 获取API密钥
+            openai_api_key = "sk-proj-U5bRRw2dz9uYLKi2Vh4ET3BlbkFJEaMqgvT8HCeb2UDfzF0b"
+            if not openai_api_key:
+                yield json.dumps({"error": "OpenAI API key not set"})
+                return
+
+            model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+            api_base = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+            
+            # 准备API请求
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {openai_api_key}",
+            }
+            
+            payload = {
+                "model": model,
+                "messages": client_messages,
+                "stream": True,
+            }
+            
+            if tools:
+                payload["tools"] = tools
+            
+            # 存储工具调用状态
+            draft_tool_calls = []
+            draft_tool_calls_index = -1
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{api_base}/chat/completions", 
+                    headers=headers, 
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        yield json.dumps({"error": f"OpenAI API error: {response.status} - {error_text}"})
+                        return
+                    
+                    # 解析Stream响应
+                    async for line in response.content:
+                        line = line.strip()
+                        if not line:
+                            continue
+                            
+                        if line.startswith(b"data: "):
+                            data = line[6:].decode('utf-8')
+                            if data == "[DONE]":
+                                if protocol == 'vercel':
+                                    yield f'e:{{"finishReason":"stop","usage":{{"promptTokens":0,"completionTokens":0}},"isContinued":false}}\n'
+                                else:
+                                    yield "data: [DONE]\n\n"
+                                continue
+                                
+                            try:
+                                chunk = json.loads(data)
+                                choice = chunk.get("choices", [{}])[0]
+                                delta = choice.get("delta", {})
+                                content = delta.get("content")
+                                
+                                # 处理常规内容
+                                if content is not None:
+                                    if protocol == 'vercel':
+                                        yield f'0:{json.dumps(content)}\n'
+                                    else:
+                                        yield f"data: {json.dumps({'content': content})}\n\n"
+                                
+                                # 处理工具调用
+                                tool_calls = delta.get("tool_calls", [])
+                                if tool_calls:
+                                    for tool_call in tool_calls:
+                                        if protocol == 'vercel':
+                                            # Vercel格式处理
+                                            id_val = tool_call.get("id")
+                                            function = tool_call.get("function", {})
+                                            name = function.get("name")
+                                            arguments = function.get("arguments", "")
+                                            
+                                            if id_val is not None:
+                                                draft_tool_calls_index += 1
+                                                draft_tool_calls.append({
+                                                    "id": id_val,
+                                                    "name": name,
+                                                    "arguments": ""
+                                                })
+                                            elif arguments and draft_tool_calls:
+                                                draft_tool_calls[draft_tool_calls_index]["arguments"] += arguments
+                                        else:
+                                            # 标准SSE格式
+                                            yield f"data: {json.dumps({'tool_call': tool_call})}\n\n"
+                                
+                                # 处理完成的工具调用
+                                finish_reason = choice.get("finish_reason")
+                                if finish_reason == "tool_calls" and protocol == 'vercel':
+                                    # 发送工具调用
+                                    for tool_call in draft_tool_calls:
+                                        yield f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{tool_call["arguments"]}}}\n'
+                                    
+                                    # 获取用户工具
+                                    tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
+                                    available_tools = load_user_tools(tools_dir)
+                                    
+                                    # 执行工具并发送结果
+                                    for tool_call in draft_tool_calls:
+                                        try:
+                                            tool_name = tool_call["name"]
+                                            tool_args = json.loads(tool_call["arguments"])
+                                            
+                                            if tool_name in available_tools:
+                                                tool_result = available_tools[tool_name](**tool_args)
+                                                yield f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{json.dumps(tool_result)}}}\n'
+                                            else:
+                                                yield f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"Tool not found"}}}}\n'
+                                        except Exception as e:
+                                            yield f'a:{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"{str(e)}"}}}\n'
+                            
+                            except json.JSONDecodeError:
+                                log.error(f"Failed to parse JSON: {data}")
+                                continue
+
+        @app.post("/api/chat")
+        async def handle_chat(request: ChatRequest, protocol: str = Query('data')):
+            """处理聊天请求"""
+            
+            # 1. 获取用户定义的工具目录
+            tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
+            
+            # 2. 动态加载用户定义的工具
+            available_tools = load_user_tools(tools_dir)
+            
+            # 3. 准备工具定义
+            tools = prepare_tools_for_api(available_tools)
+            
+            # 4. 准备OpenAI消息格式
+            try:
+                openai_messages = convert_to_openai_messages(request.messages)
+                
+                # 5. 设置响应头
+                response = StreamingResponse(
+                    stream_chat_completion(openai_messages, tools, protocol),
+                    media_type="text/event-stream"
+                )
+                
+                # Vercel AI SDK 需要这个头
+                if protocol == 'vercel':
+                    response.headers['x-vercel-ai-data-stream'] = 'v1'
+                
+                return response
+                
+            except Exception as e:
+                log.error(f"Error in handle_chat: {e}", exc_info=True)
+                return {"error": str(e)}
+
+    
+    
+
+
+
+
+    #create_verbal_labs_routes(app)
+    ###
+
     def custom_openapi() -> Dict[str, Any]:
         if not app.openapi_schema:
             openapi_schema = get_openapi(
