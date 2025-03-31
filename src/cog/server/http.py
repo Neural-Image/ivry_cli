@@ -499,7 +499,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                     
                                     # 检查是否有最终回复
                                     if content is not None:
-                                        result = f"data: {json.dumps({'content': content})}\n\n"
+                                        result = f"0:\"{content}\"\n"
                                         yield result
                                         # has_final_response = True
                                         # debug_log.write(f"[DEBUG] Received content: {content}\n")
@@ -582,10 +582,9 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                                         args_json = {"_raw": args_str}
                                                 
                                                 # 发送工具调用
-                                                if protocol == 'vercel':
-                                                    result = f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{json.dumps(args_json)}}}\n'
-                                                else:
-                                                    result = f'data: {{"type":"tool_call","id":"{tool_call["id"]}","name":"{tool_call["name"]}","args":{json.dumps(args_json)}}}\n\n'
+                                                
+                                                result = f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{json.dumps(args_json)}}}\n'
+                                                
                                                 
                                                 debug_log.write(f"[DEBUG] Yielding tool call: {result}\n")
                                                 debug_log.flush()
