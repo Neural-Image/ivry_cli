@@ -237,18 +237,47 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
     
             def get_current_weather(latitude, longitude):
                 print(f"Fetching weather data for latitude: {latitude}, longitude: {longitude}")
+                
+                # 参数验证
+                try:
+                    latitude = float(latitude)
+                    longitude = float(longitude)
+                except (ValueError, TypeError):
+                    return {"error": f"Invalid coordinates: latitude={latitude}, longitude={longitude}. Must be numbers."}
+                
+                # 范围验证
+                if not (-90 <= latitude <= 90):
+                    return {"error": f"Invalid latitude: {latitude}. Must be between -90 and 90."}
+                
+                if not (-180 <= longitude <= 180):
+                    return {"error": f"Invalid longitude: {longitude}. Must be between -180 and 180."}
+                
                 url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current=temperature_2m&hourly=temperature_2m&daily=sunrise,sunset&timezone=auto"
                 try:
                     response = requests.get(url)
                     response.raise_for_status()
-                    return response.json()
+                    data = response.json()
+                    
+                    # 添加简单描述以提升用户体验
+                    if "current" in data:
+                        temp = data.get("current", {}).get("temperature_2m")
+                        if temp is not None:
+                            if temp < 0:
+                                data["description"] = f"Very cold at {temp}°C"
+                            elif temp < 10:
+                                data["description"] = f"Cold at {temp}°C"
+                            elif temp < 20:
+                                data["description"] = f"Mild at {temp}°C"
+                            elif temp < 30:
+                                data["description"] = f"Warm at {temp}°C"
+                            else:
+                                data["description"] = f"Hot at {temp}°C"
+                    
+                    return data
                 except requests.RequestException as e:
                     print(f"Error fetching weather data: {e}")
                     return {"error": str(e)}
-            
-            # 将天气工具添加到工具字典
             tools["get_current_weather"] = get_current_weather
-                        
             return tools
 
         def prepare_tools_for_api(available_tools: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -299,8 +328,8 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
 
         # 在 create_verbal_labs_routes 函数内部添加一个日志功能
         async def stream_chat_completion(client_messages: List[Dict[str, Any]], 
-                                tools: List[Dict[str, Any]], 
-                                protocol: str) -> AsyncGenerator[str, None]:
+                            tools: List[Dict[str, Any]], 
+                            protocol: str) -> AsyncGenerator[str, None]:
             """
             流式返回聊天完成结果
             """
@@ -325,7 +354,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             debug_log.flush()
             
             # 记录请求
-            openai_api_key = "sk-proj-U5bRRw2dz9uYLKi2Vh4ET3BlbkFJEaMqgvT8HCeb2UDfzF0b"
+            openai_api_key = os.environ.get("OPENAI_API_KEY", "sk-proj-U5bRRw2dz9uYLKi2Vh4ET3BlbkFJEaMqgvT8HCeb2UDfzF0b")
             if not openai_api_key:
                 debug_log.write("[DEBUG] Error: OpenAI API key not set\n")
                 debug_log.close()
@@ -370,8 +399,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                 debug_log.flush()
             
             # 存储工具调用状态
-            draft_tool_calls = []
-            draft_tool_calls_index = -1
+            current_tool_calls = []
             
             # 打开响应日志文件
             try:
@@ -439,10 +467,8 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                     debug_log.write(f"[DEBUG] Received [DONE] marker at line {line_count}\n")
                                     debug_log.flush()
                                     
-                                    if protocol == 'vercel':
-                                        result = f'e:{{"finishReason":"stop","usage":{{"promptTokens":0,"completionTokens":0}},"isContinued":false}}\n'
-                                    else:
-                                        result = "data: [DONE]\n\n"
+                        
+                                    result = "data: [DONE]\n\n"
                                         
                                     if response_log:
                                         response_log.write(f"\n=== YIELDING: {result} ===\n")
@@ -473,20 +499,23 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                     
                                     # 检查是否有最终回复
                                     if content is not None:
-                                        has_final_response = True
-                                        debug_log.write(f"[DEBUG] Received content: {content}\n")
-                                        debug_log.flush()
-                                        
-                                        complete_response += content
-                                        if protocol == 'vercel':
-                                            result = f'0:{json.dumps(content)}\n'
-                                        else:
-                                            result = f"data: {json.dumps({'content': content})}\n\n"
-                                        
-                                        if response_log:
-                                            response_log.write(f"\n=== YIELDING: {result} ===\n")
-                                            response_log.flush()
+                                        result = f"data: {json.dumps({'content': content})}\n\n"
                                         yield result
+                                        # has_final_response = True
+                                        # debug_log.write(f"[DEBUG] Received content: {content}\n")
+                                        # debug_log.flush()
+                                        
+                                        # complete_response += content
+                                        # if protocol == 'vercel':
+                                        #     result = f'0:{json.dumps(content)}\n'
+                                        # else:
+                                        #     # 使用标准SSE格式
+                                        #     result = f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                                        
+                                        # if response_log:
+                                        #     response_log.write(f"\n=== YIELDING: {result} ===\n")
+                                        #     response_log.flush()
+                                        # yield result
                                     
                                     # 处理工具调用
                                     tool_calls = delta.get("tool_calls", [])
@@ -499,48 +528,77 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                             response_log.flush()
                                         
                                         for tool_call in tool_calls:
-                                      
-                                            # Vercel格式处理
                                             id_val = tool_call.get("id")
+                                            index = tool_call.get("index", 0)
                                             function = tool_call.get("function", {})
                                             name = function.get("name")
                                             arguments = function.get("arguments", "")
                                             
-                                    
-                                            draft_tool_calls_index += 1
-                                            draft_tool_calls.append({
-                                                "id": id_val,
-                                                "name": name,
-                                                "arguments": ""
-                                            })
-                                            debug_log.write(f"[DEBUG] Added new tool call with id: {id_val}, name: {name}\n")
-
-                        
+                                            # 更新当前工具调用状态
+                                            while len(current_tool_calls) <= index:
+                                                current_tool_calls.append({
+                                                    "id": "",
+                                                    "name": "",
+                                                    "arguments": ""
+                                                })
+                                            
+                                            if id_val:
+                                                current_tool_calls[index]["id"] = id_val
+                                            if name:
+                                                current_tool_calls[index]["name"] = name
+                                            if arguments:
+                                                current_tool_calls[index]["arguments"] += arguments
+                                            
+                                            debug_log.write(f"[DEBUG] Updated tool call at index {index}: {json.dumps(current_tool_calls[index])}\n")
+                                            debug_log.flush()
                                     
                                     # 处理完成的工具调用
                                     finish_reason = choice.get("finish_reason")
                                     if finish_reason == "tool_calls":
                                         tool_call_complete = True
                                         debug_log.write(f"[DEBUG] Tool call complete. finish_reason: {finish_reason}\n")
-                                        debug_log.write(f"[DEBUG] Complete draft tool calls: {json.dumps(draft_tool_calls)}\n")
+                                        debug_log.write(f"[DEBUG] Complete tool calls: {json.dumps(current_tool_calls)}\n")
                                         debug_log.flush()
                                         
                                         if response_log:
-                                            response_log.write(f"\n=== FINISH REASON: tool_calls, DRAFT CALLS: {json.dumps(draft_tool_calls)} ===\n")
+                                            response_log.write(f"\n=== FINISH REASON: tool_calls, TOOL CALLS: {json.dumps(current_tool_calls)} ===\n")
                                             response_log.flush()
                                         
                                         # 发送工具调用
-                                        for tool_call in draft_tool_calls:
-                                            result = f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{tool_call["arguments"]}}}\n'
-                                            debug_log.write(f"[DEBUG] Yielding tool call: {result}\n")
-                                            debug_log.flush()
+                                        for tool_call in current_tool_calls:
+                                            if not tool_call["id"]:
+                                                debug_log.write(f"[DEBUG] Skipping tool call with empty ID\n")
+                                                continue
                                             
-                                            if response_log:
-                                                response_log.write(f"\n=== YIELDING TOOL CALL: {result} ===\n")
-                                                response_log.flush()
-                                            yield result
+                                            try:
+                                                # 确保参数是有效的JSON
+                                                args_str = tool_call["arguments"]
+                                                args_json = {}
+                                                if args_str:
+                                                    try:
+                                                        args_json = json.loads(args_str)
+                                                    except json.JSONDecodeError:
+                                                        debug_log.write(f"[DEBUG] Invalid JSON in arguments: {args_str}\n")
+                                                        args_json = {"_raw": args_str}
+                                                
+                                                # 发送工具调用
+                                                if protocol == 'vercel':
+                                                    result = f'9:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{json.dumps(args_json)}}}\n'
+                                                else:
+                                                    result = f'data: {{"type":"tool_call","id":"{tool_call["id"]}","name":"{tool_call["name"]}","args":{json.dumps(args_json)}}}\n\n'
+                                                
+                                                debug_log.write(f"[DEBUG] Yielding tool call: {result}\n")
+                                                debug_log.flush()
+                                                
+                                                if response_log:
+                                                    response_log.write(f"\n=== YIELDING TOOL CALL: {result} ===\n")
+                                                    response_log.flush()
+                                                yield result
+                                            except Exception as e:
+                                                debug_log.write(f"[DEBUG] Error formatting tool call: {str(e)}\n")
+                                                debug_log.flush()
                                         
-                                        # 获取用户工具
+                                        # 获取用户工具并执行
                                         tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
                                         debug_log.write(f"[DEBUG] Loading tools from: {tools_dir}\n")
                                         debug_log.flush()
@@ -550,19 +608,22 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                         debug_log.flush()
                                         
                                         # 执行工具并发送结果
-                                        
-                                        for tool_call in draft_tool_calls:
+                                        for tool_call in current_tool_calls:
+                                            if not tool_call["id"]:
+                                                continue
+                                                
                                             try:
                                                 tool_name = tool_call["name"]
                                                 debug_log.write(f"[DEBUG] Processing tool call: {tool_name}\n")
                                                 debug_log.flush()
                                                 
+                                                # 解析工具参数
                                                 tool_args_str = tool_call["arguments"]
                                                 debug_log.write(f"[DEBUG] Tool arguments string: {tool_args_str}\n")
                                                 debug_log.flush()
                                                 
                                                 try:
-                                                    tool_args = json.loads(tool_args_str)
+                                                    tool_args = json.loads(tool_args_str) if tool_args_str else {}
                                                     debug_log.write(f"[DEBUG] Parsed tool arguments: {json.dumps(tool_args)}\n")
                                                 except json.JSONDecodeError as e:
                                                     debug_log.write(f"[DEBUG] Failed to parse tool arguments: {e}\n")
@@ -576,12 +637,19 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                                     debug_log.write(f"[DEBUG] Tool result: {json.dumps(tool_result)}\n")
                                                     debug_log.flush()
                                                     
-                                                    result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{json.dumps(tool_result)}}}\n'
+                                                    if protocol == 'vercel':
+                                                        result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{json.dumps(tool_args)},"result":{json.dumps(tool_result)}}}\n'
+                                                    else:
+                                                        result = f'data: {{"type":"tool_result","id":"{tool_call["id"]}","result":{json.dumps(tool_result)}}}\n\n'
                                                 else:
                                                     debug_log.write(f"[DEBUG] Tool not found: {tool_name}\n")
                                                     debug_log.flush()
                                                     
-                                                    result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"Tool not found"}}}}\n'
+                                                    error_message = {"error": f"Tool '{tool_name}' not found"}
+                                                    if protocol == 'vercel':
+                                                        result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{json.dumps(tool_args)},"result":{json.dumps(error_message)}}}\n'
+                                                    else:
+                                                        result = f'data: {{"type":"tool_result","id":"{tool_call["id"]}","result":{json.dumps(error_message)}}}\n\n'
                                                 
                                                 debug_log.write(f"[DEBUG] Yielding tool result: {result}\n")
                                                 debug_log.flush()
@@ -595,19 +663,18 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                                 debug_log.write(f"[DEBUG] Error executing tool: {e}\n{traceback.format_exc()}\n")
                                                 debug_log.flush()
                                                 
-                                                error_message = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_name}","args":{tool_call["arguments"]},"result":{{"error":"{str(e)}"}}}}\n'
+                                                error_message = {"error": str(e)}
+                                                if protocol == 'vercel':
+                                                    result = f'a:{{"toolCallId":"{tool_call["id"]}","toolName":"{tool_call["name"]}","args":{json.dumps(tool_args if "tool_args" in locals() else {})},"result":{json.dumps(error_message)}}}\n'
+                                                else:
+                                                    result = f'data: {{"type":"tool_result","id":"{tool_call["id"]}","result":{json.dumps(error_message)}}}\n\n'
+                                                
                                                 if response_log:
-                                                    response_log.write(f"\n=== YIELDING ERROR: {error_message} ===\n")
+                                                    response_log.write(f"\n=== YIELDING ERROR: {result} ===\n")
                                                     response_log.flush()
-                                                yield error_message
-                                        
-                                        # 检查是否需要请求最终回复
-                                        debug_log.write("[DEBUG] Tool execution complete. Checking if we need to request final answer...\n")
-                                        if not has_final_response:
-                                            debug_log.write("[DEBUG] No final response yet. A second request might be needed.\n")
-                                            # 这里可以添加代码来发起第二个请求获取最终回复
+                                                yield result
                                 
-                                except json.JSONDecodeError:
+                                except json.JSONDecodeError as e:
                                     error_message = f"Failed to parse JSON: {data}"
                                     debug_log.write(f"[DEBUG] {error_message}\n")
                                     debug_log.flush()
@@ -623,20 +690,20 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                             debug_log.write("[DEBUG] Tool call completed but no final response. A second request is needed.\n")
                             debug_log.write("[DEBUG] This appears to be an OpenAI API behavior - tool calls and final response are handled in separate requests.\n")
                             
-                            # 在这里添加代码来发起第二个请求以获取最终回复
+                            # 这里可以添加代码来发起第二个请求以获取最终回复
                             # 例如：
                             debug_log.write("[DEBUG] Preparing to make second request for final answer...\n")
                             debug_log.flush()
                             
-                            # 准备第二个请求 - 这只是一个示例，实际代码需要根据你的需求调整
+                            # 准备第二个请求
                             second_messages = client_messages.copy()
                             
                             # 添加工具结果消息
-                            for tool_call in draft_tool_calls:
-                                if tool_name in available_tools:
+                            for tool_call in current_tool_calls:
+                                if tool_call["id"] and tool_call["name"] in available_tools:
                                     try:
-                                        tool_args = json.loads(tool_call["arguments"])
-                                        tool_result = available_tools[tool_name](**tool_args)
+                                        tool_args = json.loads(tool_call["arguments"]) if tool_call["arguments"] else {}
+                                        tool_result = available_tools[tool_call["name"]](**tool_args)
                                         
                                         # 添加工具结果消息
                                         second_messages.append({
@@ -650,6 +717,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                         debug_log.write(f"[DEBUG] Failed to add tool result: {str(e)}\n")
                             
                             debug_log.write("[DEBUG] Second request would be needed for final answer, but not implemented in this version.\n")
+                            debug_log.write("[DEBUG] You can implement second request logic here if needed.\n")
                         
                         # 记录完整响应到日志
                         if response_log:
@@ -658,6 +726,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                         
                         debug_log.write(f"[DEBUG] Stream processing finished at {datetime.now().isoformat()}\n")
                         debug_log.flush()
+                        
             except Exception as e:
                 error_message = f"Error in stream_chat_completion: {str(e)}\n{traceback.format_exc()}"
                 debug_log.write(f"[DEBUG] CRITICAL ERROR: {error_message}\n")
@@ -665,7 +734,12 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                 if response_log:
                     response_log.write(f"CRITICAL ERROR: {error_message}\n")
                     response_log.flush()
-                yield json.dumps({"error": str(e)})
+                
+                if protocol == 'vercel':
+                    yield f'e:{json.dumps({"error": str(e)})}\n'
+                else:
+                    yield f'data: {json.dumps({"error": str(e)})}\n\n'
+                    
             finally:
                 # 确保关闭日志文件
                 if response_log:
@@ -674,9 +748,9 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                 debug_log.close()
 
         @app.post("/api/chat")
-        async def handle_chat(request: ChatRequest, protocol: str = Query('data')):
+        async def handle_chat(request: ChatRequest, protocol: str = Query('vercel')):
             """处理聊天请求"""
-            
+            print("protocol", protocol)
             # 1. 获取用户定义的工具目录
             tools_dir = os.environ.get("VERBAL_LABS_TOOLS_DIR", "./tools")
             
@@ -690,21 +764,23 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             try:
                 openai_messages = convert_to_openai_messages(request.messages)
                 
-                # 5. 设置响应头
+                # 5. 设置响应头 - 修改为与repo.har一致的响应头
                 response = StreamingResponse(
                     stream_chat_completion(openai_messages, tools, protocol),
-                    media_type="text/event-stream"
+                    # 移除 text/event-stream 内容类型，让它使用默认的 application/octet-stream
+                    media_type="application/octet-stream"  
                 )
                 
-                # Vercel AI SDK 需要这个头
-                if protocol == 'vercel':
-                    response.headers['x-vercel-ai-data-stream'] = 'v1'
+                # 仍然保留x-vercel-ai-data-stream头
+                
+                response.headers['x-vercel-ai-data-stream'] = 'v1'
                 
                 return response
                 
             except Exception as e:
                 log.error(f"Error in handle_chat: {e}", exc_info=True)
                 return {"error": str(e)}
+            
 
     
     
