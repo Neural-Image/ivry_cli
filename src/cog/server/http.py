@@ -31,7 +31,7 @@ from ..logging import setup_logging
 from ..mode import Mode
 from ..types import PYDANTIC_V2
 
-from pathlib import Path
+#from pathlib import Path
 import uuid
 from datetime import datetime
 import traceback
@@ -499,8 +499,21 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                                     
                                     # 检查是否有最终回复
                                     if content is not None:
-                                        result = f"0:\"{content}\"\n"
-                                        yield result
+                                        has_final_response = True
+                                        debug_log.write(f"[DEBUG] Received content: {content}\n")
+                                        debug_log.flush()
+                                        
+                                        complete_response += content
+                                        
+                                        # 逐字返回内容，使用0:前缀格式
+                                        words = content.split()
+                                        for word in words:
+                                            result = f'0:"{word}"\n'
+                                            if response_log:
+                                                response_log.write(f"\n=== YIELDING: {result} ===\n")
+                                                response_log.flush()
+                                            yield result
+                            
                                         # has_final_response = True
                                         # debug_log.write(f"[DEBUG] Received content: {content}\n")
                                         # debug_log.flush()
@@ -787,7 +800,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
 
 
 
-    #create_verbal_labs_routes(app)
+    create_verbal_labs_routes(app)
     ###
 
     def custom_openapi() -> Dict[str, Any]:
