@@ -6,15 +6,6 @@ import httpx
 import asyncio
 from functions import functions
 
-
-class WorkflowInstance(BaseModel):
-    id: str
-    current_step: int
-    function: str
-    params: Dict[str, Any]
-    webhook_url: str  # Add webhook URL to the model
-
-
 app = FastAPI()
 
 
@@ -33,16 +24,15 @@ async def execute_function_async(func_name: str, params: Dict[str, Any]):
 
 
 # Function to send results to webhook
-async def send_to_webhook(instance: WorkflowInstance, results: Any):
+async def send_to_webhook(execution_id: int, results: Any):
     async with httpx.AsyncClient() as client:
         payload = {
-            "workflow_run_id": instance.id,
-            "current_step": instance.current_step,
+            "execution_id": execution_id,
             "results": results,
         }
 
         try:
-            response = await client.post(instance.webhook_url, json=payload)
+            response = await client.post("http://localhost:3000/api/webhook/execution", json=payload)
             response.raise_for_status()
             print(f"Webhook notification sent: {response.status_code}")
         except Exception as e:
@@ -50,26 +40,44 @@ async def send_to_webhook(instance: WorkflowInstance, results: Any):
 
 
 # Background task handler
-async def process_workflow_task(instance: WorkflowInstance):
+async def process_workflow_task(func, params, execution_id):
     # Execute the function asynchronously
-    results = await execute_function_async(instance.function, instance.params)
-
+    results = await execute_function_async(func, params)
     # Send the results to the webhook
-    await send_to_webhook(instance, results)
+    await send_to_webhook(execution_id, results)
 
 
-@app.post("/execute")
-async def execute(instance: WorkflowInstance, background_tasks: BackgroundTasks):
-    # Add the task to background tasks
-    background_tasks.add_task(process_workflow_task, instance)
+# Define the request data model
+class ExecuteRequest(BaseModel):
+    function: str
+    params: dict
+    execution_id: int
 
-    # Return immediately with an acknowledgment
-    return {
-        "status": "success",
-        "message": f"Workflow {instance.id} execution started",
-        "workflow_run_id": instance.id,
-    }
 
+@app.post("/execute", status_code=202)
+async def execute(request: ExecuteRequest, background_tasks: BackgroundTasks):
+    
+    # Process the request and handle any potential errors
+    try:
+        # Execute your function logic here
+        # For example: result = await execute_function(request.function, request.params)
+        
+        # Return success response
+
+
+        background_tasks.add_task(process_workflow_task, request.function, request.params, request.execution_id)
+        # res = await functions[request.function](**request.params)
+        # print(f"result of {request.function}:", res)
+        return {
+            "success": True,
+            "message": f"Successfully submitted."
+        }
+    except Exception as e:
+        # Return failure response
+        return {
+            "success": False,
+            "message": f"Error executing {request.function}: {str(e)}"
+        }
 
 @app.get("/health-check")
 async def health_check():
