@@ -525,11 +525,9 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
         functions = cog_config.get_function_dicts(mode=Mode.PREDICT)
         print("Functions loaded:", functions)
         class WorkflowInstance(BaseModel):
-            id: str
-            current_step: int
             function: str
-            params: Dict[str, Any]
-            webhook_url: str  # Add webhook URL to the model
+            params: dict
+            execution_id: int
         
         
         # Create an async wrapper for possibly synchronous functions
@@ -545,12 +543,12 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
         async def send_to_webhook(instance: WorkflowInstance, results: Any):
             async with httpx.AsyncClient() as client:
                 payload = {
-                    "workflow_run_id": instance.id,
-                    "current_step": instance.current_step,
+                    "workflow_run_id": instance.execution_id,
                     "results": results,
                 }
+                webhook_url = "http://localhost:8000/webhook"
                 try:
-                    response = await client.post(instance.webhook_url, json=payload)
+                    response = await client.post(webhook_url, json=payload)
                     response.raise_for_status()
                     print(f"Webhook notification sent: {response.status_code}")
                 except Exception as e:
@@ -568,12 +566,14 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             background_tasks.add_task(process_workflow_task, instance)
             return {
                 "status": "success",
-                "message": f"Workflow {instance.id} execution started",
-                "workflow_run_id": instance.id,
+                "message": f"Workflow {instance.execution_id} execution started",
+                "workflow_run_id": instance.execution_id,
             }
 
         
-        
+        @app.get("/health-check")
+        async def health_check():
+            return {"status": "READY"}
         
         
         ###
