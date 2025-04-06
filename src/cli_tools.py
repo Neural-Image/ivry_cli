@@ -184,12 +184,12 @@ class Cli:
             if tunnel_config:
                 with open(tunnel_config_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_config, f, indent=4, ensure_ascii=False)
-                print(f"app_config.json saved to {dest_path}")
+                print(f"app_config.json saved to {project_path}")
             
             if tunnel_credential:
                 with open(tunnel_credential_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
-                print(f"tunnel_config.json saved to {dest_path}")
+                print(f"tunnel_config.json saved to {project_path}")
             if app_type != "comfyui":
                 shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
                 if app_type == "workflow":
