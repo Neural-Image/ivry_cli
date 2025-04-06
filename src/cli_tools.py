@@ -151,35 +151,50 @@ class Cli:
             response.raise_for_status()  
             
             data = response.json()
+            app_type = data["data"]["type"]
             
             if data.get("success") != True:
                 return f"error: {data.get('message', 'app created error')}"
             
-            app_config = data.get("data", {})
-            local_name = "app_" + str(app_id)
-            project_path = project_dir / local_name
-            dest_path = Path.cwd() / str(project_path)
-            if not dest_path.exists():
-                dest_path.mkdir(parents=True, exist_ok=True)
-                print(f"folder {dest_path} created")
-            else:
-                print(f"folder {dest_path} already exists")
             
+            if app_type == "comfyui":
+                app_config = data.get("data", {})
+                local_name = "app_" + str(app_id)
+                project_path = project_dir / local_name
+                dest_path = Path.cwd() / str(project_path)
+                if not dest_path.exists():
+                    dest_path.mkdir(parents=True, exist_ok=True)
+                    print(f"folder {dest_path} created")
+                else:
+                    print(f"folder {dest_path} already exists")
+                
+                
+            else:
+                project_path = Path.cwd()
+                
             tunnel_config = data["tunnelCfg"]["config"]
             tunnel_credential = data["tunnelCfg"]["credential"]
             
-            
+            tunnel_config_path = project_path / "tunnel_config.json"
+            tunnel_credential_path = project_path / "tunnel_credential.json"
+            if tunnel_config_path.exists() or tunnel_credential_path.exists():
+                override = input(f"Already have an app in this directory, do you want to overwrite? (y/n): ")
+                if override.lower() != 'y':
+                    return "Operation cancelled by user."
             if tunnel_config:
-                with open(project_path / "tunnel_config.json", "w", encoding="utf-8") as f:
+                with open(tunnel_config_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_config, f, indent=4, ensure_ascii=False)
                 print(f"app_config.json saved to {dest_path}")
             
             if tunnel_credential:
-                with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
+                with open(tunnel_credential_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json saved to {dest_path}")
-            if data["data"]["type"] != "comfyui":
-                pass
+            if app_type != "comfyui":
+                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                if app_type == "workflow":
+                    with open(str(project_path) + "/cog.yaml", 'w', encoding='utf-8') as f:
+                        f.write('predict: "functions.py"\n')
             else:
                 
                 system_name = platform.uname().release.lower()
@@ -208,12 +223,12 @@ class Cli:
                 generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
             
     
-            source_path = "predict.py"
-            destination_path = str(project_path) + "/predict.py"  
-            shutil.move(source_path, destination_path)
-            shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
-            
-            return f"app {app_id} pulled to {local_name}/ folder"
+                source_path = "predict.py"
+                destination_path = str(project_path) + "/predict.py"  
+                shutil.move(source_path, destination_path)
+                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                
+                return f"app {app_id} pulled to {local_name}/ folder"
             
         except requests.exceptions.HTTPError as e:
             return f"HTTP error: {str(e)}"
