@@ -31,12 +31,14 @@ from ..logging import setup_logging
 from ..mode import Mode
 from ..types import PYDANTIC_V2
 
-#from pathlib import Path
+from pathlib import Path as filePath
 import uuid
 from datetime import datetime
 import traceback
 from pydantic import BaseModel
-
+import mimetypes
+import json
+import requests
 
 try:
     from .._version import __version__
@@ -520,7 +522,8 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             else:
                 log.error("awaiting explicit shutdown")
     else:
-        ### For Function 
+        ### For Function
+        webhook_url = os.environ.get("WEBHOOK_URL", "http://localhost:8000") 
         #cog_config.get_predictor_ref(mode=Mode.PREDICT)
         functions = cog_config.get_function_dicts(mode=Mode.PREDICT)
         print("Functions loaded:", functions)
@@ -539,18 +542,130 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             else:
                 return await asyncio.to_thread(func, **params)
 
+        
+        
         # Function to send results to webhook
         async def send_to_webhook(instance: WorkflowInstance, results: Any):
             async with httpx.AsyncClient() as client:
+                # 处理结果中的文件路径
+                files_info = []
+                
+                # 递归处理结果中的文件路径 - 改进文件检测逻辑
+                def process_output(output, path=""):
+                    nonlocal files_info
+                    
+                    if isinstance(output, dict):
+                        processed_output = {}
+                        for key, value in output.items():
+                            current_path = f"{path}.{key}" if path else key
+                            processed_output[key] = process_output(value, current_path)
+                        return processed_output
+                    
+                    elif isinstance(output, list):
+                        processed_list = []
+                        for i, item in enumerate(output):
+                            processed_list.append(process_output(item, f"{path}[{i}]"))
+                        return processed_list
+                    
+                    # 改进文件路径检测逻辑
+                    elif isinstance(output, str) and (
+                        os.path.isfile(output) or 
+                        (output.startswith(('/', './')) and '.' in os.path.basename(output))
+                    ):
+                        file_path = str(output)
+                        print(f"Detected file: {file_path}")
+                        files_info.append({
+                            "path": file_path,
+                            "field_path": path
+                        })
+                        return {"file_reference": os.path.basename(file_path)}
+                    
+                    elif isinstance(output, filePath):
+                        file_path = str(output)
+                        print(f"Detected Path object: {file_path}")
+                        files_info.append({
+                            "path": file_path,
+                            "field_path": path
+                        })
+                        return {"file_reference": os.path.basename(file_path)}
+                    
+                    else:
+                        return output
+                
+                # 处理结果
+                processed_results = process_output(results)
+                print(f"Processed results: {processed_results}")
+                print(f"Detected files: {files_info}")
+                
+                # 构建初始payload
                 payload = {
                     "workflow_run_id": instance.execution_id,
-                    "results": results,
+                    "results": processed_results,
+                    "files": []
                 }
-                webhook_url = "http://localhost:8000/webhook"
+                
+                # 上传所有文件 - 添加更详细的日志
+                webhook_url = os.environ.get("WEBHOOK_URL", "http://localhost:8000")
+                print(f"Using webhook URL: {webhook_url}")
+                
+                # 直接在此处实现文件上传，避免跨函数调用的问题
+                for file_info in files_info:
+                    file_path = file_info["path"]
+                    if not os.path.exists(file_path):
+                        print(f"File not found: {file_path}")
+                        continue
+                        
+                    print(f"Uploading file: {file_path}")
+                    file_name = os.path.basename(file_path)
+                    mime_type, _ = mimetypes.guess_type(file_name)
+                    
+                    #try:
+                    with open(file_path, 'rb') as f:
+                        #files = {'file': (file_name, f.read(), mime_type)}
+                        #data = {'workflow_run_id': instance.execution_id}
+                        with open(file_path, 'rb') as file:
+                            file_content = file.read()
+                        
+                        upload_url = f"{webhook_url}/upload/{file_name}"
+                        print(f"Sending file to: {upload_url}")
+                        
+                        headers = {
+                            'Content-Type': 'content_type',
+                        }
+
+                        # 使用同步请求确保上传完成
+                        upload_response = requests.put(upload_url, data=file_content, headers=headers)
+                        upload_response.raise_for_status()
+                        
+                        upload_result = upload_response.json()
+                        print(f"Upload response: {upload_result}")
+                        
+                        file_url = upload_result.get("file_url", "")
+                        if not file_url:
+                            print("Warning: No file_url in upload response")
+                        
+                        file_data = {
+                            "field_path": file_info["field_path"],
+                            "file_name": file_name,
+                            "file_url": file_url
+                        }
+                        payload["files"].append(file_data)
+                        print(f"Added file to payload: {file_data}")
+                    #except Exception as e:
+                    #    print(f"Error uploading file {file_path}: {str(e)}")
+                
+                # 发送结果
+                webhook_endpoint = f"{webhook_url}/webhook"
+                print(f"Sending webhook to: {webhook_endpoint}")
+                print(f"Payload: {json.dumps(payload, indent=2)}")
+                
                 try:
-                    response = await client.post(webhook_url, json=payload)
+                    response = await client.post(webhook_endpoint, json=payload)
+                    print(f"Webhook response status: {response.status_code}")
+                    print(f"Webhook response body: {response.text}")
                     response.raise_for_status()
-                    print(f"Webhook notification sent: {response.status_code}")
+                    print(f"Webhook notification sent successfully")
+                                
                 except Exception as e:
                     print(f"Failed to send webhook: {str(e)}")
 

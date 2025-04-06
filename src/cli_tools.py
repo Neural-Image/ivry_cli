@@ -178,7 +178,7 @@ class Cli:
                 with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json saved to {dest_path}")
-            if data["data"]["type"] == "python":
+            if data["data"]["type"] != "comfyui":
                 pass
             else:
                 
