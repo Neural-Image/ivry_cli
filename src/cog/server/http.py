@@ -651,6 +651,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                         }
                         payload["files"].append(file_data)
                         print(f"Added file to payload: {file_data}")
+                        os.remove(file_path)  # 删除本地文件
                     #except Exception as e:
                     #    print(f"Error uploading file {file_path}: {str(e)}")
                 
@@ -665,7 +666,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                     print(f"Webhook response body: {response.text}")
                     response.raise_for_status()
                     print(f"Webhook notification sent successfully")
-                                
+                    
                 except Exception as e:
                     print(f"Failed to send webhook: {str(e)}")
 
