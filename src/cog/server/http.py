@@ -844,6 +844,7 @@ def main(args):
     host: str = args.host
 
     port = int(os.getenv("PORT", "3009"))
+    print("starting server with port:", port)
     if is_port_in_use(port):
         log.error(f"Port {port} is already in use")
         sys.exit(1)
