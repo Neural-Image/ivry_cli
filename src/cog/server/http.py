@@ -523,7 +523,11 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                 log.error("awaiting explicit shutdown")
     else:
         ### For Function
-        webhook_url = os.environ.get("WEBHOOK_URL", "http://localhost:8000") 
+        ### TODO:
+        # 1. Add string result validation
+        # 2. Mutilple file upload bug fix
+        
+        webhook_url = os.environ.get("WEBHOOK_URL", "https://www.ivry.co/api/webhook/execution") 
         #cog_config.get_predictor_ref(mode=Mode.PREDICT)
         functions = cog_config.get_function_dicts(mode=Mode.PREDICT)
         print("Functions loaded:", functions)
@@ -599,13 +603,13 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                 
                 # 构建初始payload
                 payload = {
-                    "workflow_run_id": instance.execution_id,
+                    "execution_id": instance.execution_id,
                     "results": processed_results,
                     "files": []
                 }
                 
                 # 上传所有文件 - 添加更详细的日志
-                webhook_url = os.environ.get("WEBHOOK_URL", "http://localhost:8000")
+                webhook_url = os.environ.get("WEBHOOK_URL", "https://www.ivry.co/api/webhook/execution")
                 print(f"Using webhook URL: {webhook_url}")
                 
                 # 直接在此处实现文件上传，避免跨函数调用的问题
@@ -626,7 +630,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                         with open(file_path, 'rb') as file:
                             file_content = file.read()
                         
-                        upload_url = f"{webhook_url}/upload/{file_name}"
+                        upload_url = f"https://www.ivry.co/api/cli/upload/{file_name}"
                         print(f"Sending file to: {upload_url}")
                         
                         headers = {
@@ -636,10 +640,10 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                         # 使用同步请求确保上传完成
                         upload_response = requests.put(upload_url, data=file_content, headers=headers)
                         upload_response.raise_for_status()
-                        
+                        location_url = upload_response.headers.get('location')
                         upload_result = upload_response.json()
                         print(f"Upload response: {upload_result}")
-                        
+                        print(f"Upload response location url: {location_url}")
                         file_url = upload_result.get("file_url", "")
                         if not file_url:
                             print("Warning: No file_url in upload response")
@@ -650,13 +654,14 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
                             "file_url": file_url
                         }
                         payload["files"].append(file_data)
+                        payload["results"] = [location_url]
                         print(f"Added file to payload: {file_data}")
                         os.remove(file_path)  # 删除本地文件
                     #except Exception as e:
                     #    print(f"Error uploading file {file_path}: {str(e)}")
                 
                 # 发送结果
-                webhook_endpoint = f"{webhook_url}/webhook"
+                webhook_endpoint = webhook_url
                 print(f"Sending webhook to: {webhook_endpoint}")
                 print(f"Payload: {json.dumps(payload, indent=2)}")
                 
@@ -683,7 +688,7 @@ def create_app(  # pylint: disable=too-many-arguments,too-many-locals,too-many-s
             return {
                 "status": "success",
                 "message": f"Workflow {instance.execution_id} execution started",
-                "workflow_run_id": instance.execution_id,
+                "execution_id": instance.execution_id,
             }
 
         
