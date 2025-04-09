@@ -115,7 +115,10 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
         elif component_types[i] == "textarea":
             cur_type = "str"
         elif component_types[i] == "slider":
-            cur_type = "int"
+            if element_types[i] == "float":
+                cur_type = "float"
+            else:
+                cur_type = "int"
         elif component_types[i] == "checkbox":
             cur_type = "bool"
         elif component_types[i] == "single-select":

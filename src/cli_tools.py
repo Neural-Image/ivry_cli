@@ -14,7 +14,7 @@ from util import get_apikey, find_comfyui_processes, get_comfyui_install_path, g
 import subprocess
 import signal
 import platform
-
+import time
 from heartbeat import HeartbeatManager
 from websocket_comfyui import create_predict
 from pull_project import generate_predict_file
@@ -151,35 +151,50 @@ class Cli:
             response.raise_for_status()  
             
             data = response.json()
+            app_type = data["data"]["type"]
             
             if data.get("success") != True:
                 return f"error: {data.get('message', 'app created error')}"
             
-            app_config = data.get("data", {})
-            local_name = "app_" + str(app_id)
-            project_path = project_dir / local_name
-            dest_path = Path.cwd() / str(project_path)
-            if not dest_path.exists():
-                dest_path.mkdir(parents=True, exist_ok=True)
-                print(f"folder {dest_path} created")
-            else:
-                print(f"folder {dest_path} already exists")
             
+            if app_type == "comfyui":
+                app_config = data.get("data", {})
+                local_name = "app_" + str(app_id)
+                project_path = project_dir / local_name
+                dest_path = Path.cwd() / str(project_path)
+                if not dest_path.exists():
+                    dest_path.mkdir(parents=True, exist_ok=True)
+                    print(f"folder {dest_path} created")
+                else:
+                    print(f"folder {dest_path} already exists")
+                
+                
+            else:
+                project_path = Path.cwd()
+                
             tunnel_config = data["tunnelCfg"]["config"]
             tunnel_credential = data["tunnelCfg"]["credential"]
             
-            
+            tunnel_config_path = project_path / "tunnel_config.json"
+            tunnel_credential_path = project_path / "tunnel_credential.json"
+            if tunnel_config_path.exists() or tunnel_credential_path.exists():
+                override = input(f"Already have an app in this directory, do you want to overwrite? (y/n): ")
+                if override.lower() != 'y':
+                    return "Operation cancelled by user."
             if tunnel_config:
-                with open(project_path / "tunnel_config.json", "w", encoding="utf-8") as f:
+                with open(tunnel_config_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_config, f, indent=4, ensure_ascii=False)
-                print(f"app_config.json saved to {dest_path}")
+                print(f"app_config.json saved to {project_path}")
             
             if tunnel_credential:
-                with open(project_path / "tunnel_credential.json", "w", encoding="utf-8") as f:
+                with open(tunnel_credential_path, "w", encoding="utf-8") as f:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
-                print(f"tunnel_config.json saved to {dest_path}")
-            if data["data"]["type"] == "python":
-                pass
+                print(f"tunnel_config.json saved to {project_path}")
+            if app_type != "comfyui":
+                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                if app_type == "workflow":
+                    with open(str(project_path) + "/cog.yaml", 'w', encoding='utf-8') as f:
+                        f.write('predict: "functions.py"\n')
             else:
                 
                 system_name = platform.uname().release.lower()
@@ -208,12 +223,12 @@ class Cli:
                 generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
             
     
-            source_path = "predict.py"
-            destination_path = str(project_path) + "/predict.py"  
-            shutil.move(source_path, destination_path)
-            shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
-            
-            return f"app {app_id} pulled to {local_name}/ folder"
+                source_path = "predict.py"
+                destination_path = str(project_path) + "/predict.py"  
+                shutil.move(source_path, destination_path)
+                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                
+                return f"app {app_id} pulled to {local_name}/ folder"
             
         except requests.exceptions.HTTPError as e:
             return f"HTTP error: {str(e)}"
@@ -308,7 +323,8 @@ class Cli:
         """
         Start the ivry_cli model server and cloudflared tunnel using PM2
         
-        This function uses PM2 to manage and monitor the ivry_cli model server and cloudflared tunnel processes
+        This function uses PM2 to manage and monitor the ivry_cli model server and cloudflared tunnel processes.
+        Multiple projects can be deployed simultaneously.
         
         Args:
             project (str, optional): Path to the project directory. If not provided,
@@ -326,72 +342,122 @@ class Cli:
                 return "Error: PM2 is not installed or not found. Please ensure PM2 is installed."
         except FileNotFoundError:
             return "Error: PM2 is not installed or not found. Please ensure PM2 is installed."
-        
-
+        if project == "":
+            cur_path = str(Path.cwd())
+            project = cur_path.split("/")[-1]
+        # 确定项目目录
         if project:
             project_dir = Path("ivry_project/comfyUI_project") / Path(project)
+            # 提取项目名称，用于服务命名
+            project_name = Path(project).name
         else:
             project_dir = Path.cwd()
+            # 如果没有指定项目，使用当前目录名称
+            project_name = project_dir.name
         
         if not project_dir.exists():
             return f"error: folder '{project_dir}' not found."
         
-        tunnel_config = project_dir / "tunnel_config.json"
-        if not tunnel_config.exists():
+        tunnel_config_path = project_dir / "tunnel_config.json"
+        if not tunnel_config_path.exists():
             return f"error: in '{project_dir}', tunnel_config.json not found."
         
-
+        # 创建日志目录
         logs_dir = project_dir / "logs"
         logs_dir.mkdir(exist_ok=True)
         
-
+        # PM2配置文件路径
         pm2_config_path = project_dir / "pm2_config.json"
         
+        # 读取 tunnel_config.json
+    
+        with open(tunnel_config_path, "r") as f:
+            tunnel_config = json.load(f)
+            model_id = tunnel_config.get("tunnel") or "unknown"
 
-        try:
-            with open(tunnel_config, "r") as f:
-                config = json.load(f)
-                model_id = config.get("tunnel") or config.get("token") or "unknown"
-        except (json.JSONDecodeError, FileNotFoundError):
-            model_id = "unknown"
         
-
+        
+        # 检查端口占用
         import socket
-        def check_port(port):
+        def check_port_availability(port, host='127.0.0.1'):
+            """检查指定端口是否已被占用"""
+            # 寻找可用端口
+            if port == 0:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.bind(('', 0))
+                port = s.getsockname()[1]
+                s.close()
+                return port, False
+                
+            # 检查特定端口
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                s.bind(('127.0.0.1', port))
+                s.bind((host, port))
                 s.close()
-                return False  
+                return port, False  # 端口可用
             except socket.error:
-                return True  
-
-        if check_port(3009) and not force:
-            return ("Port 3009 is already in use, which will prevent ivry_server from starting.\n"
+                s.close()
+                return port, True   # 端口被占用
+        
+        # 为每个项目分配不同的端口
+        base_port = 3009
+        # 使用项目名称的哈希值作为端口偏移量
+        project_hash = abs(hash(project_name))
+        port_offset = project_hash % 100  # 使用哈希值取模作为偏移量
+        model_port = base_port + port_offset
+        
+        # 检查分配的端口，最多尝试10次
+        for attempt in range(10):
+            model_port, is_used = check_port_availability(model_port)
+            if not is_used or force:
+                break
+            model_port += 1
+        
+        if is_used and not force:
+            return (f"Port {model_port} is already in use, which will prevent ivry_server from starting.\n"
                 "Please stop any existing ivry_server instances first or use --force to attempt restart.")
         
-
-        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if "ivry_server" in result.stdout or "ivry_cloudflared_tunnel" in result.stdout:
-            if not force:
-                return ("PM2 already running \n"
-                    "check status:ivry_cli pm2_status\n"
-                    "restart: ivry_cli pm2_control restart\n"
-                    "force start: ivry_cli run_server --force")
-            else:
-                subprocess.run(["pm2", "delete", "ivry_server"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # 使用项目名称创建PM2服务名称
+        ivry_server_name = f"ivry_server_{project_name}"
+        cloudflared_name = f"ivry_cloudflared_{project_name}"
         
-
-        ivry_log_file = (logs_dir / "ivry_server.log").resolve()
-        cloudflared_log_file = (logs_dir / "cloudflared.log").resolve()
-
+        # 检查这些特定的服务名称是否已经在运行
+        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if ivry_server_name in result.stdout or cloudflared_name in result.stdout:
+            if not force:
+                return (f"PM2 already running services for this project.\n"
+                    f"check status: ivry_cli pm2_status\n"
+                    f"restart: ivry_cli pm2_control restart {ivry_server_name},{cloudflared_name}\n"
+                    f"force start: ivry_cli run_server --project {project} --force")
+            else:
+                # 强制重启，先删除旧服务
+                subprocess.run(["pm2", "delete", ivry_server_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["pm2", "delete", cloudflared_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        # 修改 tunnel_config.json 中的端口
+        if "ingress" in tunnel_config:
+            #tunnel_config["ingress"]
+            tunnel_config["ingress"][0]["service"] = f"http://localhost:{model_port}"
+            # 保存修改后的 tunnel_config.json
+            with open(tunnel_config_path, "w") as f:
+                json.dump(tunnel_config, f, indent=2)
+            print(f"Updated tunnel_config.json with new port: {model_port}")
+        
+        # 配置日志文件路径
+        ivry_log_file = (logs_dir / f"{ivry_server_name}.log").resolve()
+        cloudflared_log_file = (logs_dir / f"{cloudflared_name}.log").resolve()
+        
+        # 为每个项目创建独立的PM2_HOME
+        pm2_home_dir = project_dir / ".pm2"
+        pm2_home_dir.mkdir(exist_ok=True)
+        
+        # 创建新的PM2配置 - 修改此处，不再使用 --port 参数，而是通过环境变量设置端口
         pm2_config = {
             "apps": [
                 {
-                    "name": "ivry_server",
-                    "interpreter": "python",  # Specify the interpreter
-                    "script": shutil.which("ivry_cli"),  # Use the full path to the ivry_cli executable
+                    "name": ivry_server_name,
+                    "interpreter": "python",
+                    "script": shutil.which("ivry_cli"),
                     "args": ["start", "model", f"--upload-url={IVRY_URL}api/cli/upload"],
                     "cwd": str(project_dir),
                     "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
@@ -400,20 +466,21 @@ class Cli:
                     "merge_logs": True,
                     "autorestart": True,
                     "max_size": "2M",
-                    "max_logs": 1,  # 限制为只保留1个日志文件
+                    "max_logs": 1,
                     "env": {
-                        "PM2_HOME": str(project_dir / ".pm2"),
-                        "FORCE_COLOR": "0",   
-                        "NO_COLOR": "1",      
-                        "PYTHONIOENCODING": "utf-8",   
-                        "PYTHONUNBUFFERED": "1"       
+                        "PM2_HOME": str(pm2_home_dir),
+                        "FORCE_COLOR": "0",
+                        "NO_COLOR": "1",
+                        "PYTHONIOENCODING": "utf-8",
+                        "PYTHONUNBUFFERED": "1",
+                        "PORT": str(model_port)  # 设置 PORT 环境变量
                     }
                 },
-                # cloudflared configuration
+                # cloudflared配置
                 {
-                    "name": "ivry_cloudflared_tunnel",
+                    "name": cloudflared_name,
                     "script": "cloudflared",
-                    "args": ["tunnel", "--config", "tunnel_config.json", "run"], 
+                    "args": ["tunnel", "--config", "tunnel_config.json", "run"],
                     "cwd": str(project_dir),
                     "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
                     "output": str(cloudflared_log_file),
@@ -421,10 +488,10 @@ class Cli:
                     "merge_logs": True,
                     "autorestart": True,
                     "max_size": "2M",
-                    "max_logs": 1,  # 限制为只保留1个日志文件
+                    "max_logs": 1,
                     "env": {
-                        "PM2_HOME": str(project_dir / ".pm2"),
-                        "NO_COLOR": "1"  
+                        "PM2_HOME": str(pm2_home_dir),
+                        "NO_COLOR": "1"
                     }
                 }
             ]
@@ -434,10 +501,24 @@ class Cli:
         with open(pm2_config_path, "w") as f:
             json.dump(pm2_config, f, indent=4)
         
+        # 保存部署信息到项目目录，便于后续管理
+        deployment_info = {
+            "project_name": project_name,
+            "model_id": model_id,
+            "ivry_server_name": ivry_server_name,
+            "cloudflared_name": cloudflared_name,
+            "model_port": model_port,
+            "deployed_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        with open(project_dir / "deployment_info.json", "w") as f:
+            json.dump(deployment_info, f, indent=4)
+        
         print(f"Starting ivry_cli model server and cloudflared tunnel for project at: {project_dir}")
         print(f"Model ID: {model_id}")
+        print(f"Project name: {project_name}")
+        print(f"Using port: {model_port}")
         print(f"Logs will be written to: {logs_dir}")
-        print(f"Log files will be limited to 1MB each")
         
         try:
             # 启动PM2进程
@@ -447,92 +528,164 @@ class Cli:
             subprocess.run(["pm2", "save"], check=True)
             
             return (f"Services started with PM2.\n"
+                f"Server name: {ivry_server_name}\n"
+                f"Tunnel name: {cloudflared_name}\n"
+                f"Port: {model_port}\n"
                 f"To view status: ivry_cli pm2_status\n"
-                f"To control services: ivry_cli pm2_control [start|stop|restart]\n"
-                f"To view logs: ivry_cli pm2_logs\n"
-                f"To stop all services: ivry_cli stop_server")
+                f"To control this service: ivry_cli pm2_control [start|stop|restart] {ivry_server_name},{cloudflared_name}\n"
+                f"To view logs: ivry_cli pm2_logs {ivry_server_name}\n"
+                f"To stop only this service: ivry_cli stop_server --project {project}")
         
         except subprocess.CalledProcessError as e:
-            return f"error when start pm2: {str(e)}"
+            return f"Error when starting PM2: {str(e)}"
         except Exception as e:
-            return f"error: {str(e)}"
+            return f"Error: {str(e)}"
 
     def stop_server(self, project: str = None, force: bool = False):
         """
-        Stop all ivry services managed by PM2.
+        Stop ivry services managed by PM2 for a specific project or all projects.
         
         Args:
-            project_path (str, optional): Path to the project directory. If not provided,
-                                        uses the current working directory.
+            project (str, optional): Path to the project directory. If not provided,
+                                uses the current working directory.
             force (bool, optional): If True, forcibly stop all processes. Default is False.
         
         Returns:
             str: Status information about the stop operation
         """
         try:
-      
+            # 确定项目目录
             if project:
                 project_dir = Path("ivry_project/comfyUI_project") / Path(project)
+                project_name = Path(project).name
             else:
                 project_dir = Path.cwd()
+                project_name = project_dir.name
             
-         
+            # 停止心跳服务
             global _heartbeat_manager
             if _heartbeat_manager:
                 _heartbeat_manager.stop()
                 _heartbeat_manager = None
                 print("Heartbeat service stopped")
             
-    
+            # 生成服务名称
+            ivry_server_name = f"ivry_server_{project_name}"
+            cloudflared_name = f"ivry_cloudflared_{project_name}"
+            
             import subprocess
             
             result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if "ivry_server" not in result.stdout and "ivry_cloudflared_tunnel" not in result.stdout:
-                return "No running ivry services found."
+            
+            if ivry_server_name not in result.stdout and cloudflared_name not in result.stdout:
+                # 尝试从deployment_info.json读取服务名称
+                deployment_info_path = project_dir / "deployment_info.json"
+                if deployment_info_path.exists():
+                    try:
+                        with open(deployment_info_path, "r") as f:
+                            deployment_info = json.load(f)
+                            ivry_server_name = deployment_info.get("ivry_server_name", ivry_server_name)
+                            cloudflared_name = deployment_info.get("cloudflared_name", cloudflared_name)
+                            
+                            # 再次检查这些服务是否在运行
+                            if ivry_server_name not in result.stdout and cloudflared_name not in result.stdout:
+                                return f"No running ivry services found for project {project_name}."
+                    except (json.JSONDecodeError, FileNotFoundError):
+                        return f"Error: Could not read deployment info for project at {project_dir}"
+                else:
+                    return f"No running ivry services found for project {project_name}."
             
             try:
-      
-                subprocess.run(["pm2", "delete", "ivry_server"], check=not force)
+                # 停止ivry_server服务
+                subprocess.run(["pm2", "delete", ivry_server_name], check=not force)
+                print(f"Stopped {ivry_server_name}")
             except subprocess.CalledProcessError:
                 if not force:
-                    return "Failed to stop ivry_server. Try using the --force flag."
+                    return f"Failed to stop {ivry_server_name}. Try using the --force flag."
             
             try:
-   
-                subprocess.run(["pm2", "delete", "ivry_cloudflared_tunnel"], check=not force)
+                # 停止cloudflared服务
+                subprocess.run(["pm2", "delete", cloudflared_name], check=not force)
+                print(f"Stopped {cloudflared_name}")
             except subprocess.CalledProcessError:
                 if not force:
-                    return "Failed to stop ivry_cloudflared_tunnel. Try using the --force flag."
+                    return f"Failed to stop {cloudflared_name}. Try using the --force flag."
             
-           
+            # 保存PM2配置
             subprocess.run(["pm2", "save"], check=False)
             
-            # Verify processes are actually stopped by checking system processes
-            ps_result = subprocess.run(["ps", "aux"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            ivry_running = "ivry_cli start model" in ps_result.stdout
-            cloudflared_running = "cloudflared tunnel" in ps_result.stdout
-            
-            if ivry_running or cloudflared_running:
-                if force:
-                    # In force mode, attempt to kill processes directly
-                    self._force_kill_processes()
-                    return "All ivry services have been forcibly terminated."
-                else:
-                    return "Some ivry processes are still running. Use --force to terminate them."
-            
-            return "All ivry services have been successfully stopped."
+            return f"Services for project {project_name} have been stopped."
         
         except FileNotFoundError:
             return "Error: PM2 is not installed or not found. Please ensure PM2 is installed."
         except Exception as e:
             if force:
-      
+                # 尝试强制停止所有进程
                 try:
                     self._force_kill_processes()
                     return "All ivry services have been forcibly terminated."
                 except Exception as kill_error:
-                    return f"error: {str(e)}. force stop error: {str(kill_error)}"
-            return f"error when stop the server: {str(e)}"
+                    return f"Error: {str(e)}. Force stop error: {str(kill_error)}"
+            return f"Error when stopping the server: {str(e)}"
+    
+    def _legacy_stop_server(self, force: bool = False):
+        """旧的停止服务方法，用于向后兼容"""
+        import subprocess
+        
+        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        # 检查是否有任何ivry服务在运行
+        if "ivry_server" not in result.stdout and "ivry_cloudflared" not in result.stdout:
+            return "No running ivry services found."
+        
+        # 查找和停止所有ivry服务
+        try:
+            # 使用grep命令找出所有ivry相关的PM2服务
+            services_result = subprocess.run(
+                ["pm2", "list", "--format", "json"], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True
+            )
+            
+            try:
+                services = json.loads(services_result.stdout)
+                stopped_services = []
+                
+                for service in services:
+                    name = service.get("name", "")
+                    if "ivry_server" in name or "ivry_cloudflared" in name:
+                        try:
+                            subprocess.run(["pm2", "delete", name], check=not force)
+                            stopped_services.append(name)
+                        except subprocess.CalledProcessError:
+                            if not force:
+                                return f"Failed to stop {name}. Try using the --force flag."
+                
+                if stopped_services:
+                    # 保存PM2配置
+                    subprocess.run(["pm2", "save"], check=False)
+                    return f"Stopped services: {', '.join(stopped_services)}"
+                else:
+                    return "No ivry services found to stop."
+                    
+            except json.JSONDecodeError:
+                # 如果JSON解析失败，尝试旧方法
+                if force:
+                    subprocess.run(["pm2", "delete", "all"], check=False)
+                    return "All services have been forcibly terminated."
+                else:
+                    return "Could not identify specific ivry services. Use --force to stop all PM2 services."
+        
+        except Exception as e:
+            if force:
+                # 尝试强制停止所有进程
+                try:
+                    self._force_kill_processes()
+                    return "All ivry services have been forcibly terminated."
+                except Exception as kill_error:
+                    return f"Error: {str(e)}. Force stop error: {str(kill_error)}"
+            return f"Error when stopping the server: {str(e)}"
 
     def _force_kill_processes(self):
   
@@ -579,6 +732,100 @@ class Cli:
             except Exception:
                 pass
         kill_process_by_port(3009)
+        
+    
+    def list_deployments(self):
+        """
+        List all running ivry deployments managed by PM2.
+        
+        Returns:
+            str: Formatted table of running deployments
+        """
+        try:
+            import subprocess
+            import json
+            from tabulate import tabulate
+            
+            # 检查PM2是否安装
+            result = subprocess.run(["pm2", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if result.returncode != 0:
+                return "Error: PM2 is not installed or not found. Please ensure PM2 is installed."
+            
+            # 获取所有PM2进程
+            services_result = subprocess.run(
+                ["pm2", "jlist"], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True
+            )
+            
+            try:
+                services = json.loads(services_result.stdout)
+            except json.JSONDecodeError:
+                return "Error parsing PM2 process list. Please ensure PM2 is working correctly."
+            
+            # 筛选出ivry服务
+            ivry_services = {}
+            for service in services:
+                name = service.get("name", "")
+                if name.startswith("ivry_server_"):
+                    project_id = name.replace("ivry_server_", "")
+                    if project_id not in ivry_services:
+                        ivry_services[project_id] = {"server": service, "tunnel": None}
+                elif name.startswith("ivry_cloudflared_"):
+                    project_id = name.replace("ivry_cloudflared_", "")
+                    if project_id not in ivry_services:
+                        ivry_services[project_id] = {"server": None, "tunnel": service}
+                    else:
+                        ivry_services[project_id]["tunnel"] = service
+            
+            if not ivry_services:
+                return "No ivry deployments found."
+            
+            # 准备表格数据
+            table_data = []
+            headers = ["Project ID", "Server Status", "Tunnel Status", "Port", "Uptime", "Memory"]
+            
+            for project_id, services in ivry_services.items():
+                server = services.get("server")
+                tunnel = services.get("tunnel")
+                
+                server_status = "✓" if server and server.get("pm2_env", {}).get("status") == "online" else "✗"
+                tunnel_status = "✓" if tunnel and tunnel.get("pm2_env", {}).get("status") == "online" else "✗"
+                
+                # 提取端口信息
+                port = "N/A"
+                if server:
+                    env = server.get("pm2_env", {})
+                    port = env.get("env", {}).get("PORT", "N/A")
+                
+                # 计算运行时间
+                uptime = "N/A"
+                if server:
+                    pm2_uptime = server.get("pm2_env", {}).get("pm_uptime", 0)
+                    if pm2_uptime:
+                        uptime_seconds = (time.time() * 1000 - pm2_uptime) / 1000
+                        days = int(uptime_seconds // 86400)
+                        hours = int((uptime_seconds % 86400) // 3600)
+                        minutes = int((uptime_seconds % 3600) // 60)
+                        uptime = f"{days}d {hours}h {minutes}m"
+                
+                # 内存使用
+                memory = "N/A"
+                if server:
+                    memory_bytes = server.get("monit", {}).get("memory", 0)
+                    memory = f"{memory_bytes / (1024 * 1024):.1f} MB"
+                
+                table_data.append([project_id, server_status, tunnel_status, port, uptime, memory])
+            
+            # 使用tabulate格式化输出
+            return tabulate(table_data, headers=headers, tablefmt="grid")
+            
+        except Exception as e:
+            return f"Error listing deployments: {str(e)}"
+    
+    
+    
 
     def pm2_status(self, project: str = None):
         """

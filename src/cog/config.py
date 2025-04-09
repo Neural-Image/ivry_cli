@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 from typing import Optional, Tuple, Type
+import importlib.util
 
 import structlog
 import yaml
@@ -166,3 +167,15 @@ class Config:
                 predictor
             )
         raise ValueError(f"Mode {mode} not found for generating input/output types.")
+
+    def get_function_dicts(
+        self, mode: Mode
+    ) -> Tuple[Type[BaseInput], Type[BaseModel], Type[BasePredictor]]:
+        predictor_ref = self.get_predictor_ref(mode=mode)
+        module_name = "functions"
+        spec = importlib.util.spec_from_file_location(module_name, predictor_ref)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        functions_dict = module.functions
+
+        return functions_dict
