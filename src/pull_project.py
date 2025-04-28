@@ -154,18 +154,14 @@ def generate_predict_file(dir_comfyui: str, port_comfyui: str, input_section: st
     else:
         port_str = f"127.0.0.1:{port_comfyui}"
     
-    # # 确保工作流目录存在
-    # os.makedirs("comfyui_workflows", exist_ok=True)
-        
-    # # 保存工作流
-    # with open(f"comfyui_workflows/{workflow_name}", "w") as output_file:
-    #     json.dump(state.json_data, output_file, indent=4)
+    try:
+        with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
+            content = template_file.read()
+    except FileNotFoundError:   
+        print("If you are deploying ComfyUI app, Please make sure you are under the root directory of ivry_cli")
+        return "Error: Template file not found."
     
-    # 读取模板并处理输入部分
-    with open("src/templates/predict_comfyui_ui.py", "r") as template_file:
-        content = template_file.read()
-    
-    # 处理逻辑部分
+
     logic_sections = []
     #print("input_parameter_dict",input_parameter_dict)
     for i, section in enumerate(input_parameter_dict):

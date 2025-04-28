@@ -136,6 +136,32 @@ class Cli:
             str: A message indicating the result of the operation
         """
         
+        import inspect
+        import os
+        
+        current_module_path = os.path.dirname(inspect.getfile(self.__class__))
+        current_module_path = os.path.abspath(current_module_path)
+        templates_path = os.path.join(current_module_path, "templates")
+        
+    
+        if not os.path.exists(templates_path):
+        
+            possible_paths = [
+                os.path.join(os.getcwd(), "src", "templates"),
+                os.path.join(os.path.dirname(os.getcwd()), "src", "templates"),
+                os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), "src", "templates")
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    templates_path = path
+                    break
+        
+        cog_yaml_path = os.path.join(templates_path, "cog.yaml")
+        if not os.path.exists(cog_yaml_path):
+            cog_yaml_content = 'predict: "predict.py:Predictor"\n'
+        
+        
         apikey = get_apikey()
         headers = {
             'X-API-KEY': str(apikey),
@@ -191,7 +217,11 @@ class Cli:
                     json.dump(tunnel_credential, f, indent=4, ensure_ascii=False)
                 print(f"tunnel_config.json saved to {project_path}")
             if app_type != "comfyui":
-                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                if os.path.exists(cog_yaml_path):
+                    shutil.copy(cog_yaml_path, str(project_path) + "/cog.yaml")
+                else:
+                    with open(str(project_path) + "/cog.yaml", 'w', encoding='utf-8') as f:
+                        f.write(cog_yaml_content)
                 if app_type == "workflow":
                     with open(str(project_path) + "/cog.yaml", 'w', encoding='utf-8') as f:
                         f.write('predict: "functions.py"\n')
@@ -217,7 +247,7 @@ class Cli:
                     comfyUI_dir = find_comfyui_path_by_port(int(comfyui_port))
                 if not comfyUI_dir:
                     return ("error: cannot find your running comfyUI process " + 
-                            f"{comfyui_port} 上。\n" +
+                            f"{comfyui_port} \n" +
                             "if your comfyUI process is running, you could add it to the command。like: ivry_cli pull_project 66 --comfyui_port 8188 --comfyUI_dir /path/to/comfyUI")
                 
                 generate_predict_file(dir_comfyui=comfyUI_dir,port_comfyui=comfyui_port,input_section=data,os_system=system_name,workflow_name=local_name)
@@ -226,7 +256,12 @@ class Cli:
                 source_path = "predict.py"
                 destination_path = str(project_path) + "/predict.py"  
                 shutil.move(source_path, destination_path)
-                shutil.copy("src/templates/cog.yaml", str(project_path) + "/cog.yaml")
+                if os.path.exists(cog_yaml_path):
+                    shutil.copy(cog_yaml_path, str(project_path) + "/cog.yaml")
+                else:
+                    with open(str(project_path) + "/cog.yaml", 'w', encoding='utf-8') as f:
+                        f.write(cog_yaml_content)
+                
                 
                 return f"app {app_id} pulled to {local_name}/ folder"
             
