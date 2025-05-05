@@ -14,6 +14,50 @@ def recoverType(data_type, val_dict):
     converter = int if data_type == "int" else float
     return {k: converter(v) for k, v in val_dict.items()}
 
+def check_default_validation(config_data):
+    """
+    Check if any input parameter's validation is missing a default value.
+    
+    Args:
+        config_data (dict): Configuration data containing inputs with validation.
+        
+    Returns:
+        tuple: (bool, str) - (True, None) if all validations have defaults,
+                             (False, error_message) otherwise.
+    """
+    if 'inputs' not in config_data:
+        return False, "Error: No 'inputs' field found in configuration"
+    
+    missing_defaults = []
+    
+    for i, input_param in enumerate(config_data['inputs']):
+        # Check if input has name and validation fields
+        if 'name' not in input_param:
+            missing_defaults.append(f"Input at index {i} is missing 'name' field")
+            continue
+            
+        name = input_param['name']
+        
+        # Check if validation exists
+        if 'validation' not in input_param:
+            missing_defaults.append(f"Input '{name}' is missing 'validation' field")
+            continue
+            
+        # Check if default exists in validation
+        validation = input_param['validation']
+        if not isinstance(validation, dict):
+            missing_defaults.append(f"Input '{name}' has invalid validation format (not a dictionary)")
+            continue
+            
+        if 'default' not in validation:
+            missing_defaults.append(f"Input '{name}' is missing 'default' in validation")
+    
+    if missing_defaults:
+        error_message = "The following inputs are missing default values:\n" + "\n".join(missing_defaults)
+        return False, error_message
+    
+    return True, None
+
 def parse_predict(predict_filename, save_type='json'):
     with open(predict_filename, encoding="utf-8") as file:
         source_code = file.read()
@@ -65,16 +109,21 @@ def parse_predict(predict_filename, save_type='json'):
         "inputs": [ {"name": inp[0], "type": inp[1], "validation": recoverType(inp[1], val)} for inp, val in zip(inputs, validation_rules)],
         "outputs": output_type
     }
-    
+
+    check_result = check_default_validation(data)
+ 
+    if check_result[0] == False:
+        return "error, " + check_result[1]
     # Optional: Save YAML to a file
-    if save_type == "yaml":
-        with open('predict_signature.yaml', 'w') as file:
-            yaml.dump(data, file, default_flow_style=False)
-
-    elif save_type == "json":
-        with open('predict_signature.json', 'w') as file:
-            json.dump(data, file)
-
+    else:
+        if save_type == "yaml":
+            with open('predict_signature.yaml', 'w') as file:
+                yaml.dump(data, file, default_flow_style=False)
+            return "Created predict_signature.yaml"
+        elif save_type == "json":
+            with open('predict_signature.json', 'w') as file:
+                json.dump(data, file)
+            return "Created predict_signature.json"
 
 def parse_predict_return(predict_filename, save_type='yaml'):
     with open(predict_filename, encoding="utf-8") as file:

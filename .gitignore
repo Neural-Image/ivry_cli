@@ -47,4 +47,8 @@ predict_signature.json
 /cat_girl
 /226test
 /predict.py
-*.log
+/ivry_project
+/tools
+/tools_definitions
+/logs
+/api_functions

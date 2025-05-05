@@ -879,7 +879,7 @@ def main():
                 gr.Markdown("# Edit your UI")
                 gr.Markdown("## Upload your predict.py (If you just used predict.py generator, predict.py locate in your ivry root folder)")
                 
-                python_input = gr.File(label="Upload predict.py File", file_types=[".py"])
+                python_input = gr.File(label="Upload predict.py File")
                 python_output = gr.JSON(label="File Content (Loaded in Memory)")
                 python_input.change(upload_python, inputs=python_input, outputs=python_output)
                 

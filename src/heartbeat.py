@@ -7,17 +7,16 @@ import logging
 logger = logging.getLogger("heartbeat")
 
 class HeartbeatManager:
-    """管理与服务器的心跳机制"""
     
     def __init__(self, upload_url: str, model_id: str, api_key: str, interval: int = 3600):
         """
-        初始化心跳管理器
+        init HeartbeatManager
         
         Args:
-            upload_url: 心跳上传的URL
-            model_id: 模型ID
-            api_key: API密钥
-            interval: 心跳间隔(秒)，默认3600秒(1小时)
+            upload_url: heartbeat url
+            model_id: model id
+            api_key: dev token
+            interval: heartbeat interval
         """
         self.upload_url = upload_url
         self.model_id = model_id
@@ -29,7 +28,7 @@ class HeartbeatManager:
         self.last_heartbeat_status = False
     
     def start(self):
-        """启动心跳线程"""
+        """sttart heartbeat thread"""
         if self.running:
             return
             
@@ -39,7 +38,7 @@ class HeartbeatManager:
         logger.info(f"Heartbeat manager started with interval of {self.interval} seconds")
     
     def stop(self):
-        """停止心跳线程"""
+        """stop heartbeat thread"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
@@ -47,22 +46,22 @@ class HeartbeatManager:
         logger.info("Heartbeat manager stopped")
     
     def _heartbeat_loop(self):
-        """心跳循环"""
+        """heartbeat loop"""
         while self.running:
             try:
                 self._send_heartbeat()
-                # 睡眠到下次心跳时间，但每1秒检查一次是否应该停止
+                # sleep for interval seconds
                 for _ in range(self.interval):
                     if not self.running:
                         break
                     time.sleep(1)
             except Exception as e:
                 logger.error(f"Error in heartbeat loop: {str(e)}")
-                # 发生错误后等待较短时间再重试
+                # sleep for 60 seconds
                 time.sleep(60)
     
     def _send_heartbeat(self):
-        """发送单次心跳"""
+        """send heartbeat"""
         try:
             payload = {
                 "model_id": self.model_id,
@@ -102,7 +101,7 @@ class HeartbeatManager:
             return False
             
     def get_status(self):
-        """获取心跳状态"""
+        """get heartbeat status"""
         return {
             "running": self.running,
             "last_heartbeat_time": self.last_heartbeat_time,

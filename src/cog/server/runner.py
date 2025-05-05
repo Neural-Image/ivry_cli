@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Generic, List, Literal, Optional, TypeVar, Union
-
+from pathlib import Path
+import threading
 import requests
 import structlog
 from attrs import define, field
@@ -255,6 +256,8 @@ class PredictTask(Task[schema.PredictionResponse]):
         prediction_request: schema.PredictionRequest,
         upload_url: Optional[str] = None,
     ) -> None:
+        self._webhook_completed = threading.Event()
+        self._cleanup_scheduled = False
         self._log = log.bind(prediction_id=prediction_request.id)
 
         self._log.info("starting prediction")
@@ -413,7 +416,98 @@ class PredictTask(Task[schema.PredictionResponse]):
 
     def _send_webhook(self, event: schema.WebhookEvent) -> None:
         if self._webhook_sender is not None:
-            self._webhook_sender(self._p, event)
+            try:
+                self._webhook_sender(self._p, event)
+                if event == schema.WebhookEvent.COMPLETED:
+                    self._webhook_completed.set()
+                    if hasattr(self, "_output_files_to_cleanup") and not self._cleanup_scheduled:
+                        self._schedule_cleanup()
+            except Exception as e:
+                self._log.error(f"Error sending webhook: {e}")
+                if event == schema.WebhookEvent.COMPLETED:
+                    self._webhook_completed.set()
+                    if hasattr(self, "_output_files_to_cleanup") and not self._cleanup_scheduled:
+                        self._schedule_cleanup()
+            
+    def _cleanup_original_files(self, output: Any) -> None:
+
+        self._log.info("Starting cleanup of original output files")
+        
+        if isinstance(output, list):
+            for item in output:
+                self._cleanup_single_file(item)
+        else:
+            self._cleanup_single_file(output)
+        
+        self._log.info("Cleanup of original output files completed")
+        
+    def _schedule_cleanup(self) -> None:
+        """
+        Schedule the cleanup task to run after ensuring webhooks are complete.
+        """
+        self._cleanup_scheduled = True
+        
+        def cleanup_when_ready():
+            webhook_completed = self._webhook_completed.wait(timeout=30.0)
+            if not webhook_completed:
+                self._log.warn("Webhook did not complete within timeout, proceeding with cleanup anyway")
+            
+            try:
+                self._cleanup_output_files()
+            except Exception as e:
+                self._log.error(f"Error during file cleanup: {e}")
+        
+        cleanup_thread = threading.Thread(target=cleanup_when_ready)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
+    
+    
+    def _cleanup_single_file(self, file_item: Any) -> None:
+
+        if file_item is None:
+            return
+            
+        try:
+         
+            if isinstance(file_item, Path):
+                if file_item.exists():
+                    self._log.info(f"Cleaning up output file: {file_item}")
+                    file_item.unlink()  
+                    
+                    parent_dir = file_item.parent
+                    if parent_dir.exists() and "tmp" in str(parent_dir):
+                        try:
+                            if not any(parent_dir.iterdir()):
+                                parent_dir.rmdir()
+                                self._log.info(f"Removed empty temporary directory: {parent_dir}")
+                        except Exception as e:
+                            self._log.warn(f"Error removing temporary directory {parent_dir}: {e}")
+        except Exception as e:
+            self._log.warn(f"Error cleaning up file {file_item}: {e}")
+        
+    def _cleanup_output_files(self) -> None:
+        """
+        Clean up temporary output files after prediction is complete and webhooks are sent.
+        """
+        if not hasattr(self, "_output_files_to_cleanup"):
+            return
+            
+        for file_path in self._output_files_to_cleanup:
+            if isinstance(file_path, Path):
+                try:
+                    if file_path.exists():
+                        self._log.info(f"Cleaning up output file: {file_path}")
+                        file_path.unlink()
+                        parent_dir = file_path.parent
+                        if parent_dir.exists() and "tmp" in str(parent_dir):
+                            try:
+                                if not any(parent_dir.iterdir()):
+                                    parent_dir.rmdir()
+                                    self._log.info(f"Removed empty temporary directory: {parent_dir}")
+                            except Exception as e:
+                                self._log.warn(f"Error removing temporary directory {parent_dir}: {e}")
+                except Exception as e:
+                    self._log.warn(f"Error cleaning up output file {file_path}: {e}")
 
     def _upload_files(self, output: Any) -> Any:
         if self._file_uploader is None:
@@ -421,7 +515,14 @@ class PredictTask(Task[schema.PredictionResponse]):
 
         try:
             # TODO: clean up output files
-            return self._file_uploader(output)
+            original_output = output
+            uploaded_output = self._file_uploader(output)
+            keep_files = getattr(self._p, 'keep_output_files', False)
+            if not keep_files:
+                self._cleanup_original_files(original_output)
+            else:
+                self._log.info("Keeping output files as requested by keep_output_files=True")
+            return uploaded_output
         except (FileNotFoundError, NotADirectoryError):
             # These error cases indicate that an output path returned by a prediction does
             # not actually exist, so there is no way for us to even attempt to upload it.

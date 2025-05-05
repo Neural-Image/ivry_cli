@@ -14,6 +14,13 @@ from .telemetry import current_trace_context
 from .useragent import get_user_agent
 from util import get_apikey
 
+import json
+from pprint import pprint
+
+WEBHOOK_DEBUG = 0
+WEBHOOK_DEBUG_BODY = 0
+
+
 log = structlog.get_logger(__name__)
 
 _response_interval = float(os.environ.get("COG_THROTTLE_RESPONSE_INTERVAL", 0.5))
@@ -53,13 +60,43 @@ def webhook_caller(webhook: str) -> Callable[[Any], None]:
                 )
             else:
                 dict_response = jsonable_encoder(response.dict(exclude_unset=True))
+            
+            session = retry_session if Status.is_terminal(response.status) else default_session
+            if WEBHOOK_DEBUG:
+                print("\n" + "="*50)
+                print(f"WEBHOOK REQUEST TO: {webhook}")
+                print(f"EVENT TYPE: {response.status}")
+                print("HEADERS:")
+                pprint(dict(session.headers))
+                
+                if WEBHOOK_DEBUG_BODY:
+                    print("PAYLOAD:")
+                    pprint(dict_response)
+                else:
+                    print("PAYLOAD PREVIEW:")
+                    payload_str = json.dumps(dict_response)[:100]
+                    print(f"{payload_str}..." if len(payload_str) >= 100 else payload_str)
+                print("="*50 + "\n")
+            
             if Status.is_terminal(response.status):
                 # For terminal updates, retry persistently
-                retry_session.post(webhook, json=dict_response)
+                webhook_response = retry_session.post(webhook, json=dict_response)
+                if webhook_response.status_code != 200:
+                    log.error(
+                        "webhook failed",
+                        status_code=webhook_response.status_code,
+                        response=webhook_response.text,
+                    )
             else:
                 # For other requests, don't retry, and ignore any errors
                 try:
-                    default_session.post(webhook, json=dict_response)
+                    webhook_response = default_session.post(webhook, json=dict_response)
+                    if webhook_response.status_code != 200:
+                        log.error(
+                            "webhook failed",
+                            status_code=webhook_response.status_code,
+                            response=webhook_response.text,
+                        )
                 except requests.exceptions.RequestException:
                     log.warn("caught exception while sending webhook", exc_info=True)
             throttler.update_last_sent_response_time()
@@ -81,21 +118,6 @@ def requests_session() -> requests.Session:
     #if auth_token:
     
     # trunc log
-
-    file_path = "client.log"
-    max_size = 5 * 1024 * 1024  # 文件最大字节数 5mb
-    if os.path.exists(file_path) and os.path.getsize(file_path) > max_size:
-        with open(file_path, "rb+") as file:
-            # 定位到最后 max_size 字节的位置
-            file.seek(-max_size, os.SEEK_END)
-            # 读取最新的内容
-            data = file.read()
-            # 清空文件并写入最新内容
-            file.seek(0)
-            file.write(data)
-            file.truncate()
-
-    #
 
     apikey = get_apikey()
     session.headers["X-API-KEY"] = str(apikey)

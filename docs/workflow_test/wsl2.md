@@ -19,37 +19,48 @@ Before moving forward, make sure you reboot your computer so that Windows 11 wil
 
 ## 2. Init wsl2 environment
 
-### 2.1 install requirements
+[wsl2 image](https://drive.google.com/file/d/10vf-E5ylGC6YuHYWnAbQOMaJhIO0WocS/view?usp=sharing)
 
-Install requirements by 
-
+### import wsl2 environment
 ```bash
-. install.sh
-```
-
-note: if your wsl cannot do apt update, you can open install.sh in notebook and copy paste each steps
-
-(optional)
-### 2.2 import wsl2 environment
-```bash
-wsl --import ivry path\to\your\wsl\path path\to\backup.tar
+wsl --import ivry-cli path\to\your\wsl\path path\to\backup.tar
 ```
 example:
 ```bash
-wsl --import ivry C:\WSL\Ubuntu C:\User\Downloads\Ubuntu22-04.tar
+wsl --import ivry-cli C:\WSL\Ubuntu C:\User\Downloads\ivry-cli.tar
 ```
 
-password for wsl2 ivry is ivry
+get into the wsl2 environment
 ```bash
-wsl -d ivry -u ivry #to enter the wsl2, make sure you enter wsl2 with user ivry (not root) 
+wsl -d ivry-cli
 ```
 
 
-## 3. Run webui
+## 3. Get into ivry_cli
 
-Run webui by:
+check ivry_cli:
 ```bash
-cd path/to/your/cli
-ivry_web
+cd /opt/ivry_cli
+```
+```bash
+source venv/bin/activate
+```
+```bash
+ivry_cli
+```
+
+## 4. pull project from ivry website
+
+### Make sure your comfyUI dir is in " "
+```bash
+ivry_cli pull_project --app_id your_app_id --comfyUI_dir "your_comfyUI_dir"
+#ivry_cli pull_project --app_id 48 --comfyUI_dir "C:\Users\playtime\Desktop\ComfyUI_windows_portable\ComfyUI"
+```
+
+## 5. host your project
+### project name is "app_" + your app id
+```bash
+ivry_cli run_server --project app_id --force
+#ivry_cli run_server --project app_48 --force
 ```
 

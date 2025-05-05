@@ -8,11 +8,30 @@ import websocket #NOTE: websocket-client (https://github.com/websocket-client/we
 import uuid
 import json
 import os
-from websocket_comfyui import get_images, queue_prompt, get_history 
+from websocket_comfyui import get_images, queue_prompt, get_history, check_comfyui_connection
 from typing import List
+import subprocess
+from typing import Dict, List, Any, Optional, Tuple, Union
+
 
 from dotenv import load_dotenv
 load_dotenv()
+
+
+def get_local_ip(port: Union[str, int]) -> str:
+    """Get the local IP address"""
+    try:
+        result = subprocess.check_output(
+            "ip route | grep default | awk '{print $3}'", 
+            shell=True, 
+            text=True,
+            timeout=5
+        ).strip()
+        return f"{result}:{port}"
+    except (subprocess.SubprocessError, subprocess.TimeoutExpired):
+        return f"127.0.0.1:{port}"
+
+
 
 # 1.Please put your comfyUI path here:
 COMFYUI_PATH = {{dir_comfyui}}
@@ -25,6 +44,8 @@ class Predictor(BasePredictor):
         pass
 
     
+
+
 
     # 3.put your inputs here:
     """
@@ -42,7 +63,9 @@ class Predictor(BasePredictor):
         # 4.put your workflow api path here:
         workflow_file = {{workflow_dir}}
 
-
+        if check_comfyui_connection(server_address) == False:
+            raise Exception("ComfyUI server is not running")
+        
         with open(workflow_file, 'r', encoding="utf-8") as workflow_file:
             prompt_config = json.load(workflow_file)
 
