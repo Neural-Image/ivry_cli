@@ -1,32 +1,13 @@
-# Updated ivry_cli Documentation
+# IVRY CLI
 
-## 🔥 Updates
-- **2025/03/14**: Add log size limitation (1mb per file)
-- **2025/03/12**: Support python creators
-- **2025/03/07**: Fixed issues with `run_server` command, now using direct subprocess approach 
-- **2025/03/07**: Added troubleshooting section for common errors
-- **2025/03/07**: Added new `list_apps` command to view all your applications
-- **2025/02/27**: ivry_cli pulling capabilities added
-- **2025/02/26**: WebUI updates:
-  - Find ComfyUI information
-  - Better UI experience
-- **2025/02/08**: WebUI updates:
-  - Input type validation
-  - Log monitor
-- **2025/01/29**: WebUI updates:
-  - Inputs renamed
-  - Workflow API JSON validation
-  - Duplicate input check
-- **2025/01/28**: WebUI Windows version (TODO: Update app, signature JSON)
-- **2025/01/23**: WebUI Beta release
-- **2025/01/20**: Logging improvements:
-  - Log truncation (holds latest 5MB logs)
-  - Default logging interval set to 1 second
-  - Organized hyperparameters (Website URL)
+**IVRY CLI** is a command-line tool designed to streamline the deployment of local services and make them securely accessible via the  [IVRY platform](https://ivry.co/apps). 
 
-For Installation, please check our [ivry_cli documentation](https://neural-image.github.io/ivry_documentation/)
+It currently supports services built with **Python** and **ComfyUI**.
+Hit us up if you're interested in being a developer on IVRY or want to collaborate with us. [We're on Discord](https://discord.gg/gGu8vhWk).
 
 ---
+### Installation
+For Installation, please check our [ivry_cli documentation](https://neural-image.github.io/ivry_documentation/)
 
 ### Connection Problems
 If you're having trouble connecting to the server, check:
@@ -51,14 +32,37 @@ ps aux | grep cloudflared
 # Then use the PIDs to terminate them
 kill <PID>
 ```
-
+`
 ### Port Already in Use
-If you see "Port 3009 is already in use" errors:
+If you see "Port 3009 is already in use" errors:1
 1. Check for running ivry processes: `ps aux | grep ivry`
 2. Stop any running processes: `ivry_cli stop_server --force`
 3. If needed, manually kill the process using the port: `lsof -i:3009` then `kill <PID>`
 
 ---
+### 🔥 Updates
+- **2025/03/14**: Add log size limitation (1mb per file)
+- **2025/03/12**: Support python creators
+- **2025/03/07**: Fixed issues with `run_server` command, now using direct subprocess approach 
+- **2025/03/07**: Added troubleshooting section for common errors
+- **2025/03/07**: Added new `list_apps` command to view all your applications
+- **2025/02/27**: ivry_cli pulling capabilities added
+- **2025/02/26**: WebUI updates:
+  - Find ComfyUI information
+  - Better UI experience
+- **2025/02/08**: WebUI updates:
+  - Input type validation
+  - Log monitor
+- **2025/01/29**: WebUI updates:
+  - Inputs renamed
+  - Workflow API JSON validation
+  - Duplicate input check
+- **2025/01/28**: WebUI Windows version (TODO: Update app, signature JSON)
+- **2025/01/23**: WebUI Beta release
+- **2025/01/20**: Logging improvements:
+  - Log truncation (holds latest 5MB logs)
+  - Default logging interval set to 1 second
+  - Organized hyperparameters (Website URL)
 
 ### Completed Tasks:
 ✅ update parse_inout for python project
